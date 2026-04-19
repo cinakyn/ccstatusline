@@ -6,6 +6,7 @@ import {
     loadClaudeSettings,
     saveClaudeSettings
 } from './claude-settings';
+import { lineWidgets } from './groups';
 import { getWidget } from './widgets';
 
 export interface WidgetHookDef {
@@ -35,7 +36,7 @@ function getActiveHookDefs(settings: Settings): WidgetHookDef[] {
     const seen = new Set<string>();
     const defs: WidgetHookDef[] = [];
     for (const line of settings.lines) {
-        for (const item of line) {
+        for (const item of lineWidgets(line)) {
             const widget = getWidget(item.type) as (Widget & { getHooks?: () => WidgetHookDef[] }) | null;
             if (!widget?.getHooks) {
                 continue;

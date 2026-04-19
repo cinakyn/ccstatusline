@@ -6,6 +6,7 @@ import {
 
 import { DEFAULT_SETTINGS } from '../../types/Settings';
 import type { WidgetItem } from '../../types/Widget';
+import { lineWidgets } from '../groups';
 import { buildEnabledPowerlineSettings } from '../powerline-settings';
 
 describe('powerline settings helpers', () => {
@@ -41,7 +42,7 @@ describe('powerline settings helpers', () => {
     });
 
     it('removes manual separators when requested', () => {
-        const line: WidgetItem[] = [
+        const widgets: WidgetItem[] = [
             { id: '1', type: 'model' },
             { id: '2', type: 'separator' },
             { id: '3', type: 'context-length' },
@@ -49,25 +50,35 @@ describe('powerline settings helpers', () => {
         ];
         const settings = {
             ...DEFAULT_SETTINGS,
-            lines: [line]
+            lines: [{ groups: [{ continuousColor: true, widgets }] }]
         };
 
         const updated = buildEnabledPowerlineSettings(settings, true);
-        expect(updated.lines[0]?.map(item => item.type)).toEqual(['model', 'context-length']);
+        const firstLine = updated.lines[0];
+        expect(firstLine).toBeDefined();
+        if (!firstLine) {
+            throw new Error('Expected first line to exist');
+        }
+        expect(lineWidgets(firstLine).map(item => item.type)).toEqual(['model', 'context-length']);
     });
 
     it('keeps manual separators when removal is not requested', () => {
-        const line: WidgetItem[] = [
+        const widgets: WidgetItem[] = [
             { id: '1', type: 'model' },
             { id: '2', type: 'separator' },
             { id: '3', type: 'context-length' }
         ];
         const settings = {
             ...DEFAULT_SETTINGS,
-            lines: [line]
+            lines: [{ groups: [{ continuousColor: true, widgets }] }]
         };
 
         const updated = buildEnabledPowerlineSettings(settings, false);
-        expect(updated.lines[0]?.map(item => item.type)).toEqual(['model', 'separator', 'context-length']);
+        const firstLine = updated.lines[0];
+        expect(firstLine).toBeDefined();
+        if (!firstLine) {
+            throw new Error('Expected first line to exist');
+        }
+        expect(lineWidgets(firstLine).map(item => item.type)).toEqual(['model', 'separator', 'context-length']);
     });
 });

@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 
 import type { PowerlineConfig } from '../../types/PowerlineConfig';
 import type { Settings } from '../../types/Settings';
+import { lineWidgets } from '../../utils/groups';
 import { type PowerlineFontStatus } from '../../utils/powerline';
 import { buildEnabledPowerlineSettings } from '../../utils/powerline-settings';
 
@@ -166,7 +167,7 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
     const [confirmingEnable, setConfirmingEnable] = useState(false);
     const [confirmingFontInstall, setConfirmingFontInstall] = useState(false);
 
-    const hasSeparatorItems = settings.lines.some(line => line.some(
+    const hasSeparatorItems = settings.lines.some(line => lineWidgets(line).some(
         item => item.type === 'separator' || item.type === 'flex-separator'
     ));
 

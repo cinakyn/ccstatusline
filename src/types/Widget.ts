@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { RenderContext } from './RenderContext';
 import type { Settings } from './Settings';
+import { WhenRuleSchema } from './When';
 
 // Widget item schema - accepts any string type for forward compatibility
 export const WidgetItemSchema = z.object({
@@ -20,7 +21,8 @@ export const WidgetItemSchema = z.object({
     timeout: z.number().optional(),
     merge: z.union([z.boolean(), z.literal('no-padding')]).optional(),
     hide: z.boolean().optional(),
-    metadata: z.record(z.string(), z.string()).optional()
+    metadata: z.record(z.string(), z.string()).optional(),
+    when: z.array(WhenRuleSchema).optional()
 });
 
 // Inferred types from Zod schemas

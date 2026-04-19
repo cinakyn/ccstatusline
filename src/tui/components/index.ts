@@ -2,6 +2,7 @@
 export * from './ColorMenu';
 export * from './ConfirmDialog';
 export * from './GlobalOverridesMenu';
+export * from './GroupEditor';
 export * from './InstallMenu';
 export * from './ItemsEditor';
 export * from './LineSelector';

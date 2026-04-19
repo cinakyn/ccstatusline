@@ -170,7 +170,11 @@ describe('buildCommand via installStatusLine', () => {
         initConfigPath(configPath);
         const settingsWithSkills = {
             ...DEFAULT_SETTINGS,
-            lines: [[{ id: 'skills-1', type: 'skills' }], [], []]
+            lines: [
+                { groups: [{ continuousColor: true, widgets: [{ id: 'skills-1', type: 'skills' }] }] },
+                { groups: [] },
+                { groups: [] }
+            ]
         };
         fs.writeFileSync(configPath, JSON.stringify(settingsWithSkills, null, 2), 'utf-8');
 

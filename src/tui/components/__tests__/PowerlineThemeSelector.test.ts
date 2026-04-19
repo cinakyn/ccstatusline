@@ -1,5 +1,4 @@
 import { render } from 'ink';
-import { PassThrough } from 'node:stream';
 import React from 'react';
 import {
     afterEach,
@@ -11,44 +10,18 @@ import {
 
 import { DEFAULT_SETTINGS } from '../../../types/Settings';
 import { getPowerlineThemes } from '../../../utils/colors';
+import { lineWidgets } from '../../../utils/groups';
+import {
+    createMockStdin,
+    createMockStdout,
+    flushInk
+} from '../../__tests__/helpers/ink-test-utils';
 import {
     PowerlineThemeSelector,
     applyCustomPowerlineTheme,
     buildPowerlineThemeItems,
     type PowerlineThemeSelectorProps
 } from '../PowerlineThemeSelector';
-
-class MockTtyStream extends PassThrough {
-    isTTY = true;
-    columns = 120;
-    rows = 40;
-
-    setRawMode() {
-        return this;
-    }
-
-    ref() {
-        return this;
-    }
-
-    unref() {
-        return this;
-    }
-}
-
-function createMockStdin(): NodeJS.ReadStream {
-    return new MockTtyStream() as unknown as NodeJS.ReadStream;
-}
-
-function createMockStdout(): NodeJS.WriteStream {
-    return new MockTtyStream() as unknown as NodeJS.WriteStream;
-}
-
-function flushInk() {
-    return new Promise((resolve) => {
-        setTimeout(resolve, 25);
-    });
-}
 
 describe('PowerlineThemeSelector helpers', () => {
     afterEach(() => {
@@ -84,12 +57,21 @@ describe('PowerlineThemeSelector helpers', () => {
 
         expect(updatedSettings).not.toBeNull();
         expect(updatedSettings?.powerline.theme).toBe('custom');
-        expect(updatedSettings?.lines[0]?.[0]).toMatchObject({
+        const updatedFirstLine = updatedSettings?.lines[0];
+        const originalFirstLine = settings.lines[0];
+        expect(updatedFirstLine).toBeDefined();
+        expect(originalFirstLine).toBeDefined();
+        if (!updatedFirstLine || !originalFirstLine) {
+            throw new Error('Expected first line to exist in both original and updated settings');
+        }
+        const updatedWidgets = lineWidgets(updatedFirstLine);
+        const originalWidgets = lineWidgets(originalFirstLine);
+        expect(updatedWidgets[0]).toMatchObject({
             color: 'ansi256:16',
             backgroundColor: 'ansi256:167'
         });
-        expect(updatedSettings?.lines[0]?.[1]).toEqual(settings.lines[0]?.[1]);
-        expect(updatedSettings?.lines[0]?.[2]).toMatchObject({
+        expect(updatedWidgets[1]).toEqual(originalWidgets[1]);
+        expect(updatedWidgets[2]).toMatchObject({
             color: 'ansi256:235',
             backgroundColor: 'ansi256:214'
         });

@@ -1,3 +1,7 @@
+import type {
+    WhenPredicate,
+    WhenRule
+} from '../types/When';
 import type { WidgetItem } from '../types/Widget';
 
 import { generateGuid } from './guid';
@@ -170,6 +174,45 @@ export const migrations: Migration[] = [
 
             return migrated;
         }
+    },
+    {
+        fromVersion: 3,
+        toVersion: 4,
+        description: 'Migrate from v3 to v4: wrap each line\'s widgets in a single group',
+        migrate: (data) => {
+            const migrated: Record<string, unknown> = { ...data };
+            const v3Lines = Array.isArray(data.lines) ? data.lines : [];
+            migrated.lines = v3Lines.map((line) => {
+                const widgets = Array.isArray(line) ? line : [];
+                return { groups: [{ continuousColor: true, widgets }] };
+            });
+
+            // B2: populate new powerline symbol vocabulary from old fields
+            if (isRecord(data.powerline)) {
+                const pl = data.powerline;
+                const oldSeparators = Array.isArray(pl.separators)
+                    ? pl.separators.filter((s): s is string => typeof s === 'string')
+                    : ['\uE0B0'];
+                const oldStartCaps = Array.isArray(pl.startCaps)
+                    ? pl.startCaps.filter((s): s is string => typeof s === 'string')
+                    : [];
+                const oldEndCaps = Array.isArray(pl.endCaps)
+                    ? pl.endCaps.filter((s): s is string => typeof s === 'string')
+                    : [];
+                migrated.powerline = {
+                    ...pl,
+                    widgetSeparator: [...oldSeparators],
+                    groupStartCap: [...oldStartCaps],
+                    groupEndCap: [...oldEndCaps],
+                    lineStartCap: [...oldStartCaps],
+                    lineEndCap: [...oldEndCaps],
+                    groupGap: '  '
+                };
+            }
+
+            migrated.version = 4;
+            return migrated;
+        }
     }
 ];
 
@@ -217,4 +260,57 @@ export function migrateConfig(data: unknown, targetVersion: number): unknown {
  */
 export function needsMigration(data: unknown, targetVersion: number): boolean {
     return detectVersion(data) < targetVersion;
+}
+
+const LEGACY_HIDE_FLAG_MAP: Readonly<Record<string, WhenPredicate>> = Object.freeze({
+    hideNoGit: 'no-git',
+    hideNoRemote: 'no-remote',
+    hideWhenNotFork: 'not-fork',
+    hideWhenEmpty: 'empty'
+});
+
+function ruleEquals(a: WhenRule, b: WhenRule): boolean {
+    return a.on === b.on && a.do === b.do && a.value === b.value;
+}
+
+/**
+ * Rewrite legacy metadata hide flags (hideNoGit, hideNoRemote, hideWhenNotFork,
+ * hideWhenEmpty) set to "true" into equivalent top-level `when: [{on, do: "hide"}]`
+ * rules. Dedupe against existing `when` entries. Leave non-legacy metadata keys
+ * intact; drop `metadata` entirely if it becomes empty.
+ *
+ * This is a load-time rewrite applied independently of schema version migrations —
+ * legacy flags can exist in v3 configs alongside new `when` rules.
+ */
+export function rewriteLegacyHideFlags(item: WidgetItem): WidgetItem {
+    const metadata = item.metadata ?? {};
+    const legacyRules: WhenRule[] = [];
+    const remainingMeta: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(metadata)) {
+        const predicate = LEGACY_HIDE_FLAG_MAP[key];
+        if (predicate && value === 'true') {
+            legacyRules.push({ on: predicate, do: 'hide' });
+        } else {
+            remainingMeta[key] = value;
+        }
+    }
+
+    if (legacyRules.length === 0) {
+        return item;
+    }
+
+    const existing = item.when ?? [];
+    const merged = [...existing];
+    for (const rule of legacyRules) {
+        if (!merged.some(existingRule => ruleEquals(existingRule, rule))) {
+            merged.push(rule);
+        }
+    }
+
+    return {
+        ...item,
+        metadata: Object.keys(remainingMeta).length > 0 ? remainingMeta : undefined,
+        when: merged
+    };
 }

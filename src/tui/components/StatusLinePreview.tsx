@@ -5,9 +5,11 @@ import {
 } from 'ink';
 import React from 'react';
 
+import type { Line } from '../../types/Group';
 import type { RenderContext } from '../../types/RenderContext';
 import type { Settings } from '../../types/Settings';
 import type { WidgetItem } from '../../types/Widget';
+import { lineWidgets } from '../../utils/groups';
 import { advanceGlobalPowerlineThemeIndex } from '../../utils/powerline-theme-index';
 import {
     calculateMaxWidthsFromPreRendered,
@@ -19,7 +21,7 @@ import {
 import { advanceGlobalSeparatorIndex } from '../../utils/separator-index';
 
 export interface StatusLinePreviewProps {
-    lines: WidgetItem[][];
+    lines: Line[];
     terminalWidth: number;
     settings?: Settings;
     onTruncationChange?: (isTruncated: boolean) => void;
@@ -33,7 +35,8 @@ const renderSingleLine = (
     globalSeparatorIndex: number,
     globalPowerlineThemeIndex: number,
     preRenderedWidgets: PreRenderedWidget[],
-    preCalculatedMaxWidths: number[]
+    preCalculatedMaxWidths: number[],
+    lineEntry: Line
 ): RenderResult => {
     // Create render context for preview
     const context: RenderContext = {
@@ -45,7 +48,7 @@ const renderSingleLine = (
         globalPowerlineThemeIndex
     };
 
-    return renderStatusLineWithInfo(widgets, settings, context, preRenderedWidgets, preCalculatedMaxWidths);
+    return renderStatusLineWithInfo(widgets, settings, context, preRenderedWidgets, preCalculatedMaxWidths, lineEntry);
 };
 
 export const StatusLinePreview: React.FC<StatusLinePreviewProps> = ({ lines, terminalWidth, settings, onTruncationChange }) => {
@@ -65,25 +68,30 @@ export const StatusLinePreview: React.FC<StatusLinePreviewProps> = ({ lines, ter
         let truncated = false;
 
         for (let i = 0; i < lines.length; i++) {
-            const lineItems = lines[i];
-            if (lineItems && lineItems.length > 0) {
+            const lineEntry = lines[i];
+            if (!lineEntry) {
+                continue;
+            }
+            const widgetsForLine = lineWidgets(lineEntry);
+            if (widgetsForLine.length > 0) {
                 const preRenderedWidgets = preRenderedLines[i] ?? [];
                 const renderResult = renderSingleLine(
-                    lineItems,
+                    widgetsForLine,
                     terminalWidth,
                     settings,
                     i,
                     globalSeparatorIndex,
                     globalPowerlineThemeIndex,
                     preRenderedWidgets,
-                    preCalculatedMaxWidths
+                    preCalculatedMaxWidths,
+                    lineEntry
                 );
                 result.push(renderResult.line);
                 if (renderResult.wasTruncated) {
                     truncated = true;
                 }
 
-                globalSeparatorIndex = advanceGlobalSeparatorIndex(globalSeparatorIndex, lineItems);
+                globalSeparatorIndex = advanceGlobalSeparatorIndex(globalSeparatorIndex, widgetsForLine);
                 if (settings.powerline.enabled && settings.powerline.continueThemeAcrossLines) {
                     globalPowerlineThemeIndex = advanceGlobalPowerlineThemeIndex(globalPowerlineThemeIndex, preRenderedWidgets);
                 }

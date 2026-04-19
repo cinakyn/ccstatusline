@@ -10,8 +10,10 @@ import {
 } from '../types/Settings';
 
 import {
+    detectVersion,
     migrateConfig,
-    needsMigration
+    needsMigration,
+    rewriteLegacyHideFlags
 } from './migrations';
 
 // Use fs.promises directly (always available in modern Node.js)
@@ -39,6 +41,7 @@ interface SettingsPaths {
     configDir: string;
     settingsPath: string;
     settingsBackupPath: string;
+    v3BackupPath: string;
 }
 
 function getSettingsPaths(): SettingsPaths {
@@ -51,7 +54,8 @@ function getSettingsPaths(): SettingsPaths {
     return {
         configDir,
         settingsPath,
-        settingsBackupPath: path.join(configDir, backupBaseName)
+        settingsBackupPath: path.join(configDir, backupBaseName),
+        v3BackupPath: path.join(configDir, `${parsedPath.base}.v3.bak`)
     };
 }
 
@@ -69,6 +73,22 @@ async function backupBadSettings(paths: SettingsPaths): Promise<void> {
         }
     } catch (error) {
         console.error('Failed to backup bad settings:', error);
+    }
+}
+
+async function backupV3Settings(paths: SettingsPaths): Promise<void> {
+    try {
+        if (fs.existsSync(paths.v3BackupPath))
+            return;
+
+        if (!fs.existsSync(paths.settingsPath))
+            return;
+
+        const content = await readFile(paths.settingsPath, 'utf-8');
+        await writeFile(paths.v3BackupPath, content, 'utf-8');
+        console.error(`v3 settings backed up to ${paths.v3BackupPath}`);
+    } catch (error) {
+        console.error('Failed to backup v3 settings:', error);
     }
 }
 
@@ -115,6 +135,9 @@ export async function loadSettings(): Promise<Settings> {
 
         // Check if this is a v1 config (no version field)
         const hasVersion = typeof rawData === 'object' && rawData !== null && 'version' in rawData;
+        // Detect pre-migration version so we know whether to snapshot the v3
+        // file before overwriting it with v4 content.
+        const preMigrationVersion = detectVersion(rawData);
         if (!hasVersion) {
             // Parse as v1 to validate before migration
             const v1Result = SettingsSchema_v1.safeParse(rawData);
@@ -127,6 +150,11 @@ export async function loadSettings(): Promise<Settings> {
             rawData = migrateConfig(rawData, CURRENT_VERSION);
             await writeSettingsJson(rawData, paths);
         } else if (needsMigration(rawData, CURRENT_VERSION)) {
+            // If we're migrating away from a v3 on-disk file, snapshot it first
+            // so the user has a restore point before we rewrite it as v4.
+            if (preMigrationVersion === 3)
+                await backupV3Settings(paths);
+
             // Handle migrations for versioned configs (v2+) and save the migrated settings back to disk
             rawData = migrateConfig(rawData, CURRENT_VERSION);
             await writeSettingsJson(rawData, paths);
@@ -140,7 +168,19 @@ export async function loadSettings(): Promise<Settings> {
             return await recoverWithDefaults(paths);
         }
 
-        return result.data;
+        // Rewrite legacy metadata hide flags (hideNoGit, hideNoRemote, etc.) into
+        // equivalent top-level `when` rules. Load-time only — does not touch disk.
+        const settings: Settings = {
+            ...result.data,
+            lines: result.data.lines.map(line => ({
+                groups: line.groups.map(group => ({
+                    ...group,
+                    widgets: group.widgets.map(rewriteLegacyHideFlags)
+                }))
+            }))
+        };
+
+        return settings;
     } catch (error) {
         // Any other error, backup and write defaults
         console.error('Error loading settings:', error);

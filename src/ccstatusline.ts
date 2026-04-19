@@ -17,6 +17,7 @@ import {
     loadSettings,
     saveSettings
 } from './utils/config';
+import { lineWidgets } from './utils/groups';
 import {
     getSessionDuration,
     getSpeedMetricsCollection,
@@ -99,13 +100,13 @@ async function renderMultipleLines(data: StatusJSON) {
     const lines = settings.lines;
 
     // Check if session clock is needed
-    const hasSessionClock = lines.some(line => line.some(item => item.type === 'session-clock'));
+    const hasSessionClock = lines.some(line => lineWidgets(line).some(item => item.type === 'session-clock'));
 
     const speedWidgetTypes = new Set(['output-speed', 'input-speed', 'total-speed']);
-    const hasSpeedItems = lines.some(line => line.some(item => speedWidgetTypes.has(item.type)));
+    const hasSpeedItems = lines.some(line => lineWidgets(line).some(item => speedWidgetTypes.has(item.type)));
     const requestedSpeedWindows = new Set<number>();
     for (const line of lines) {
-        for (const item of line) {
+        for (const item of lineWidgets(line)) {
             if (speedWidgetTypes.has(item.type) && isWidgetSpeedWindowEnabled(item)) {
                 requestedSpeedWindows.add(getWidgetSpeedWindowSeconds(item));
             }
@@ -122,7 +123,7 @@ async function renderMultipleLines(data: StatusJSON) {
         sessionDuration = await getSessionDuration(data.transcript_path);
     }
 
-    const usageData = await prefetchUsageDataIfNeeded(lines, data);
+    const usageData = await prefetchUsageDataIfNeeded(lines.map(lineWidgets), data);
 
     let speedMetrics: SpeedMetrics | null = null;
     let windowedSpeedMetrics: Record<string, SpeedMetrics> | null = null;
@@ -162,8 +163,12 @@ async function renderMultipleLines(data: StatusJSON) {
     let globalSeparatorIndex = 0;
     let globalPowerlineThemeIndex = 0;
     for (let i = 0; i < lines.length; i++) {
-        const lineItems = lines[i];
-        if (lineItems && lineItems.length > 0) {
+        const lineEntry = lines[i];
+        if (!lineEntry) {
+            continue;
+        }
+        const widgetsForLine = lineWidgets(lineEntry);
+        if (widgetsForLine.length > 0) {
             const preRenderedWidgets = preRenderedLines[i] ?? [];
             const lineContext = {
                 ...context,
@@ -171,20 +176,20 @@ async function renderMultipleLines(data: StatusJSON) {
                 globalSeparatorIndex,
                 globalPowerlineThemeIndex
             };
-            const line = renderStatusLine(lineItems, settings, lineContext, preRenderedWidgets, preCalculatedMaxWidths);
+            const renderedLine = renderStatusLine(widgetsForLine, settings, lineContext, preRenderedWidgets, preCalculatedMaxWidths, lineEntry);
 
             // Only output the line if it has content (not just ANSI codes)
             // Strip ANSI codes to check if there's actual text
-            const strippedLine = getVisibleText(line).trim();
+            const strippedLine = getVisibleText(renderedLine).trim();
             if (strippedLine.length > 0) {
                 // Replace all spaces with non-breaking spaces to prevent VSCode trimming
-                let outputLine = line.replace(/ /g, '\u00A0');
+                let outputLine = renderedLine.replace(/ /g, '\u00A0');
 
                 // Add reset code at the beginning to override Claude Code's dim setting
                 outputLine = '\x1b[0m' + outputLine;
                 console.log(outputLine);
 
-                globalSeparatorIndex = advanceGlobalSeparatorIndex(globalSeparatorIndex, lineItems);
+                globalSeparatorIndex = advanceGlobalSeparatorIndex(globalSeparatorIndex, widgetsForLine);
                 if (settings.powerline.enabled && settings.powerline.continueThemeAcrossLines) {
                     globalPowerlineThemeIndex = advanceGlobalPowerlineThemeIndex(globalPowerlineThemeIndex, preRenderedWidgets);
                 }

@@ -13,6 +13,7 @@ import React, {
     useState
 } from 'react';
 
+import type { Line } from '../types/Group';
 import type { Settings } from '../types/Settings';
 import type { WidgetItem } from '../types/Widget';
 import {
@@ -34,6 +35,10 @@ import {
     loadSettings,
     saveSettings
 } from '../utils/config';
+import {
+    lineWidgets,
+    writeFlatWidgets
+} from '../utils/groups';
 import { openExternalUrl } from '../utils/open-url';
 import {
     checkPowerlineFonts,
@@ -48,6 +53,7 @@ import {
     ColorMenu,
     ConfirmDialog,
     GlobalOverridesMenu,
+    GroupEditor,
     InstallMenu,
     ItemsEditor,
     LineSelector,
@@ -69,6 +75,7 @@ interface FlashMessage {
 
 type AppScreen = 'main'
     | 'lines'
+    | 'groups'
     | 'items'
     | 'colorLines'
     | 'colors'
@@ -100,6 +107,24 @@ export function clearInstallMenuSelection(menuSelections: Record<string, number>
     return next;
 }
 
+/**
+ * Compute the screen to navigate to after the user picks a line. Groups are a
+ * powerline-only feature: when groupsEnabled is true AND powerline is enabled
+ * we enter the group editor first; otherwise we jump straight to the items
+ * editor (silent fallback when powerline is off). The group cursor is always
+ * reset to 0 so a stale index from a previous (potentially longer) line can
+ * never index into a shorter line's groups[].
+ */
+export function getLineSelectTransition(groupsEnabled: boolean, powerlineEnabled: boolean): {
+    nextScreen: Extract<AppScreen, 'groups' | 'items'>;
+    nextSelectedGroup: number;
+} {
+    return {
+        nextScreen: groupsEnabled && powerlineEnabled ? 'groups' : 'items',
+        nextSelectedGroup: 0
+    };
+}
+
 export const App: React.FC = () => {
     const { exit } = useApp();
     const [settings, setSettings] = useState<Settings | null>(null);
@@ -107,6 +132,7 @@ export const App: React.FC = () => {
     const [hasChanges, setHasChanges] = useState(false);
     const [screen, setScreen] = useState<AppScreen>('main');
     const [selectedLine, setSelectedLine] = useState(0);
+    const [selectedGroup, setSelectedGroup] = useState(0);
     const [menuSelections, setMenuSelections] = useState<Record<string, number>>({});
     const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
     const [isClaudeInstalled, setIsClaudeInstalled] = useState(false);
@@ -318,17 +344,46 @@ export const App: React.FC = () => {
 
     const updateLine = (lineIndex: number, widgets: WidgetItem[]) => {
         const newLines = [...settings.lines];
-        newLines[lineIndex] = widgets;
+        newLines[lineIndex] = writeFlatWidgets(newLines[lineIndex], widgets);
         setSettings({ ...settings, lines: newLines });
     };
 
-    const updateLines = (newLines: WidgetItem[][]) => {
+    const updateGroupWidgets = (lineIndex: number, groupIndex: number, widgets: WidgetItem[]) => {
+        const newLines = [...settings.lines];
+        const line = newLines[lineIndex];
+        if (!line) {
+            return;
+        }
+
+        const newGroups = [...line.groups];
+        const group = newGroups[groupIndex];
+        if (!group) {
+            return;
+        }
+
+        newGroups[groupIndex] = { ...group, widgets };
+        newLines[lineIndex] = { ...line, groups: newGroups };
+        setSettings({ ...settings, lines: newLines });
+    };
+
+    const updateLineGroups = (lineIndex: number, line: Line) => {
+        const newLines = [...settings.lines];
+        newLines[lineIndex] = line;
+        setSettings({ ...settings, lines: newLines });
+    };
+
+    const updateLines = (newLines: Line[]) => {
         setSettings({ ...settings, lines: newLines });
     };
 
     const handleLineSelect = (lineIndex: number) => {
+        const { nextScreen, nextSelectedGroup } = getLineSelectTransition(settings.groupsEnabled, settings.powerline.enabled);
         setSelectedLine(lineIndex);
-        setScreen('items');
+        // Reset group cursor so a stale index from a previous line never
+        // indexes a shorter line's groups[] (which would feed ItemsEditor
+        // an empty widget list and route writes into a non-existent slot).
+        setSelectedGroup(nextSelectedGroup);
+        setScreen(nextScreen);
     };
 
     return (
@@ -397,16 +452,59 @@ export const App: React.FC = () => {
                         allowEditing={true}
                     />
                 )}
-                {screen === 'items' && (
-                    <ItemsEditor
-                        widgets={settings.lines[selectedLine] ?? []}
-                        onUpdate={(widgets) => { updateLine(selectedLine, widgets); }}
+                {screen === 'groups' && (
+                    <GroupEditor
+                        line={settings.lines[selectedLine] ?? { groups: [] }}
+                        lineNumber={selectedLine + 1}
+                        onGroupSelect={(groupIndex) => {
+                            setSelectedGroup(groupIndex);
+                            setScreen('items');
+                        }}
+                        onLineUpdate={(line) => { updateLineGroups(selectedLine, line); }}
                         onBack={() => {
-                            // When going back to lines menu, preserve which line was selected
                             setMenuSelections(prev => ({ ...prev, lines: selectedLine }));
                             setScreen('lines');
                         }}
+                        settings={settings}
+                    />
+                )}
+                {screen === 'items' && (
+                    <ItemsEditor
+                        widgets={(() => {
+                            const line = settings.lines[selectedLine];
+                            if (!line) {
+                                return [];
+                            }
+
+                            if (settings.groupsEnabled) {
+                                return line.groups[selectedGroup]?.widgets ?? [];
+                            }
+
+                            // Flat mode: operate only on groups[0].widgets so that
+                            // any additional groups (from prior groupsEnabled=true
+                            // editing) are preserved. Don't flatten across all
+                            // groups — that would cause writeFlatWidgets to drop
+                            // groups[1..N] on the next edit.
+                            return line.groups[0]?.widgets ?? [];
+                        })()}
+                        onUpdate={(widgets) => {
+                            if (settings.groupsEnabled) {
+                                updateGroupWidgets(selectedLine, selectedGroup, widgets);
+                            } else {
+                                updateLine(selectedLine, widgets);
+                            }
+                        }}
+                        onBack={() => {
+                            if (settings.groupsEnabled) {
+                                setScreen('groups');
+                            } else {
+                                // When going back to lines menu, preserve which line was selected
+                                setMenuSelections(prev => ({ ...prev, lines: selectedLine }));
+                                setScreen('lines');
+                            }
+                        }}
                         lineNumber={selectedLine + 1}
+                        groupNumber={settings.groupsEnabled ? selectedGroup + 1 : undefined}
                         settings={settings}
                     />
                 )}
@@ -433,13 +531,16 @@ export const App: React.FC = () => {
                 )}
                 {screen === 'colors' && (
                     <ColorMenu
-                        widgets={settings.lines[selectedLine] ?? []}
+                        widgets={(() => {
+                            const entry = settings.lines[selectedLine];
+                            return entry ? lineWidgets(entry) : [];
+                        })()}
                         lineIndex={selectedLine}
                         settings={settings}
                         onUpdate={(updatedWidgets) => {
                             // Update only the selected line
                             const newLines = [...settings.lines];
-                            newLines[selectedLine] = updatedWidgets;
+                            newLines[selectedLine] = writeFlatWidgets(newLines[selectedLine], updatedWidgets);
                             setSettings({ ...settings, lines: newLines });
                         }}
                         onBack={() => {

@@ -2,11 +2,12 @@ import { z } from 'zod';
 
 import { ColorLevelSchema } from './ColorLevel';
 import { FlexModeSchema } from './FlexMode';
+import { LineSchema } from './Group';
 import { PowerlineConfigSchema } from './PowerlineConfig';
 import { WidgetItemSchema } from './Widget';
 
 // Current version - bump this when making breaking changes to the schema
-export const CURRENT_VERSION = 3;
+export const CURRENT_VERSION = 4;
 
 // Schema for v1 settings (before version field was added)
 export const SettingsSchema_v1 = z.object({
@@ -25,20 +26,24 @@ export const SettingsSchema_v1 = z.object({
 // Main settings schema with defaults
 export const SettingsSchema = z.object({
     version: z.number().default(CURRENT_VERSION),
-    lines: z.array(z.array(WidgetItemSchema))
+    lines: z.array(LineSchema)
         .min(1)
         .default([
-            [
-                { id: '1', type: 'model', color: 'cyan' },
-                { id: '2', type: 'separator' },
-                { id: '3', type: 'context-length', color: 'brightBlack' },
-                { id: '4', type: 'separator' },
-                { id: '5', type: 'git-branch', color: 'magenta' },
-                { id: '6', type: 'separator' },
-                { id: '7', type: 'git-changes', color: 'yellow' }
-            ],
-            [],
-            []
+            {
+                groups: [{
+                    continuousColor: true, widgets: [
+                        { id: '1', type: 'model', color: 'cyan' },
+                        { id: '2', type: 'separator' },
+                        { id: '3', type: 'context-length', color: 'brightBlack' },
+                        { id: '4', type: 'separator' },
+                        { id: '5', type: 'git-branch', color: 'magenta' },
+                        { id: '6', type: 'separator' },
+                        { id: '7', type: 'git-changes', color: 'yellow' }
+                    ]
+                }]
+            },
+            { groups: [] },
+            { groups: [] }
         ]), // Ensure max 3 lines
     flexMode: FlexModeSchema.default('full-minus-40'),
     compactThreshold: z.number().min(1).max(99).default(60),
@@ -50,16 +55,9 @@ export const SettingsSchema = z.object({
     overrideForegroundColor: z.string().optional(),
     globalBold: z.boolean().default(false),
     minimalistMode: z.boolean().default(false),
-    powerline: PowerlineConfigSchema.default({
-        enabled: false,
-        separators: ['\uE0B0'],
-        separatorInvertBackground: [false],
-        startCaps: [],
-        endCaps: [],
-        theme: undefined,
-        autoAlign: false,
-        continueThemeAcrossLines: false
-    }),
+    groupsEnabled: z.boolean().default(false),
+    defaultGroupGap: z.string().default('  '),
+    powerline: PowerlineConfigSchema.default(() => PowerlineConfigSchema.parse({})),
     updatemessage: z.object({
         message: z.string().nullable().optional(),
         remaining: z.number().nullable().optional()

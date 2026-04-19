@@ -50,7 +50,7 @@ function renderLine(
         terminalWidth: options.terminalWidth
     };
 
-    const preRenderedLines = preRenderAllWidgets([widgets], settings, context);
+    const preRenderedLines = preRenderAllWidgets([{ groups: [{ continuousColor: true, widgets }] }], settings, context);
     const preCalculatedMaxWidths = calculateMaxWidthsFromPreRendered(preRenderedLines, settings);
     const preRenderedWidgets = preRenderedLines[0] ?? [];
 
@@ -207,7 +207,7 @@ describe('renderer minimalist mode', () => {
             minimalist: true
         };
 
-        const preRenderedLines = preRenderAllWidgets([widgets], settings, context);
+        const preRenderedLines = preRenderAllWidgets([{ groups: [{ continuousColor: true, widgets }] }], settings, context);
         const content = preRenderedLines[0]?.[0]?.content;
 
         // With minimalist mode, model widget should render raw value ('Claude') not 'Model: Claude'
@@ -222,7 +222,7 @@ describe('renderer minimalist mode', () => {
             minimalist: false
         };
 
-        const preRenderedLines = preRenderAllWidgets([widgets], settings, context);
+        const preRenderedLines = preRenderAllWidgets([{ groups: [{ continuousColor: true, widgets }] }], settings, context);
         const content = preRenderedLines[0]?.[0]?.content;
 
         expect(content).toBe('Model: Claude');

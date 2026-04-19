@@ -42,7 +42,7 @@ function renderLine(settings: Settings, globalPowerlineThemeIndex: number): stri
         lineIndex: 1,
         globalPowerlineThemeIndex
     };
-    const preRenderedLines = preRenderAllWidgets([widgets], settings, context);
+    const preRenderedLines = preRenderAllWidgets([{ groups: [{ continuousColor: true, widgets }] }], settings, context);
     const preCalculatedMaxWidths = calculateMaxWidthsFromPreRendered(preRenderedLines, settings);
     const preRenderedWidgets = preRenderedLines[0] ?? [];
 

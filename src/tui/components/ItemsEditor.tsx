@@ -39,10 +39,12 @@ export interface ItemsEditorProps {
     onUpdate: (widgets: WidgetItem[]) => void;
     onBack: () => void;
     lineNumber: number;
+    /** When set, the editor is operating on a specific group (groupsEnabled=true). */
+    groupNumber?: number;
     settings: Settings;
 }
 
-export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onBack, lineNumber, settings }) => {
+export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onBack, lineNumber, groupNumber, settings }) => {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [moveMode, setMoveMode] = useState(false);
     const [customEditorWidget, setCustomEditorWidget] = useState<CustomEditorWidgetState | null>(null);
@@ -341,14 +343,21 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
         );
     }
 
+    // Breadcrumb: "Edit Line N › [Group M ›] Widget K" (spec requires 3-depth
+    // when groupsEnabled). Use "Widget -" when the list is empty so the depth
+    // marker is still visible at this navigation level.
+    const widgetDepthLabel = widgets.length > 0
+        ? `Widget ${selectedIndex + 1}`
+        : 'Widget -';
+    const breadcrumb = groupNumber !== undefined
+        ? `Edit Line ${lineNumber} › Group ${groupNumber} › ${widgetDepthLabel} `
+        : `Edit Line ${lineNumber} › ${widgetDepthLabel} `;
+
     return (
         <Box flexDirection='column'>
             <Box>
                 <Text bold>
-                    Edit Line
-                    {' '}
-                    {lineNumber}
-                    {' '}
+                    {breadcrumb}
                 </Text>
                 {moveMode && <Text color='blue'>[MOVE MODE]</Text>}
                 {widgetPicker && <Text color='cyan'>{`[${pickerActionLabel.toUpperCase()}]`}</Text>}

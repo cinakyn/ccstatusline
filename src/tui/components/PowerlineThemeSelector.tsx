@@ -60,21 +60,27 @@ export function applyCustomPowerlineTheme(
     const lines = settings.lines.map((line) => {
         let widgetColorIndex = 0;
 
-        return line.map((widget) => {
-            if (widget.type === 'separator' || widget.type === 'flex-separator') {
-                return widget;
-            }
+        return {
+            ...line,
+            groups: line.groups.map(group => ({
+                ...group,
+                widgets: group.widgets.map((widget) => {
+                    if (widget.type === 'separator' || widget.type === 'flex-separator') {
+                        return widget;
+                    }
 
-            const fgColor = themeColors.fg[widgetColorIndex % themeColors.fg.length];
-            const bgColor = themeColors.bg[widgetColorIndex % themeColors.bg.length];
-            widgetColorIndex++;
+                    const fgColor = themeColors.fg[widgetColorIndex % themeColors.fg.length];
+                    const bgColor = themeColors.bg[widgetColorIndex % themeColors.bg.length];
+                    widgetColorIndex++;
 
-            return {
-                ...widget,
-                color: fgColor,
-                backgroundColor: bgColor
-            };
-        });
+                    return {
+                        ...widget,
+                        color: fgColor,
+                        backgroundColor: bgColor
+                    };
+                })
+            }))
+        };
     });
 
     return {

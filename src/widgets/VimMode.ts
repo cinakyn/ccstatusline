@@ -2,7 +2,7 @@ import type { RenderContext } from '../types/RenderContext';
 import type { Settings } from '../types/Settings';
 import type {
     CustomKeybind,
-    Widget,
+    StatefulWidget,
     WidgetEditorDisplay,
     WidgetItem
 } from '../types/Widget';
@@ -78,7 +78,7 @@ function formatMode(mode: string, format: VimFormat, icon: string): string {
     }
 }
 
-export class VimModeWidget implements Widget {
+export class VimModeWidget implements StatefulWidget {
     getDefaultColor(): string { return 'green'; }
     getDescription(): string { return 'Displays current vim editor mode'; }
     getDisplayName(): string { return 'Vim Mode'; }
@@ -134,4 +134,13 @@ export class VimModeWidget implements Widget {
 
     supportsRawValue(): boolean { return false; }
     supportsColors(_item: WidgetItem): boolean { return true; }
+
+    getStateKey(_item: WidgetItem, context: RenderContext): string | null {
+        const mode = context.data?.vim?.mode;
+        return mode ? mode.toLowerCase() : null;
+    }
+
+    getAllStates(): string[] {
+        return ['normal', 'insert', 'visual', 'command', 'replace'];
+    }
 }

@@ -1,8 +1,11 @@
 import type { RenderContext } from '../types/RenderContext';
+import type { Settings } from '../types/Settings';
 import type {
+    WhenArgs,
     WhenPredicate,
     WhenRule
 } from '../types/When';
+import type { WidgetItem } from '../types/Widget';
 
 import {
     evaluatePredicate,
@@ -16,17 +19,20 @@ export interface WhenResult {
     boldOverride?: boolean;
 }
 
-export type PredicateEvaluator = (
+type PredicateEvaluator = (
     predicate: WhenPredicate,
+    item: WidgetItem,
     context: RenderContext,
-    renderedText: string
+    settings: Settings,
+    renderedText: string,
+    args?: WhenArgs
 ) => boolean;
 
 export interface EvaluateWhenOptions {
     /**
      * When true, any rule whose predicate needs rendered text (currently
-     * only `empty`) is skipped. Used during the pre-render pass to defer
-     * empty evaluation until after widgets have produced output.
+     * only `core.empty`) is skipped. Used during the pre-render pass to
+     * defer empty evaluation until after widgets have produced output.
      */
     skipEmpty?: boolean;
     /**
@@ -47,16 +53,22 @@ export interface EvaluateWhenOptions {
  * Apply a list of `WhenRule`s against the current render context and widget
  * text, collecting the resulting hide decision and style overrides.
  *
- * Semantics (from docs/when-triggers/spec.md — "Evaluation semantics"):
+ * Semantics:
  *   1. `hide` is union-OR across all matching rules — every rule is
  *      evaluated, no short-circuit.
- *   2. `color`/`bg`/`bold` overrides are last-wins.
- *   3. `options.skipEmpty = true` skips any rule whose predicate is `empty`
- *      (used for the pre-render pass before widget text exists).
+ *   2. `setTag` overrides are FIRST-wins per field (rule-list order). Rule 1
+ *      has highest priority: once a field (color / backgroundColor / bold)
+ *      has been set, later matching `setTag` rules leave it alone. Fields not
+ *      yet set can still be filled by later rules.
+ *   3. `options.skipEmpty = true` skips any rule whose predicate needs
+ *      rendered text (used for the pre-render pass before widget text
+ *      exists).
  */
 export function evaluateWhen(
     rules: WhenRule[] | undefined,
+    item: WidgetItem,
     context: RenderContext,
+    settings: Settings,
     renderedText: string,
     options: EvaluateWhenOptions = {}
 ): WhenResult {
@@ -77,32 +89,35 @@ export function evaluateWhen(
             continue;
         }
 
-        const matches = evaluator(rule.on, context, renderedText);
+        const matches = evaluator(rule.on, item, context, settings, renderedText, rule.args);
         if (debug) {
+            const extra = rule.do === 'setTag' ? ` tag=${rule.tag}` : '';
             process.stderr.write(
-                `[when] on=${rule.on} do=${rule.do} match=${String(matches)}\n`
+                `[when] on=${rule.on} do=${rule.do}${extra} match=${String(matches)}\n`
             );
         }
         if (!matches)
             continue;
 
-        switch (rule.do) {
-            case 'hide':
-                result.hide = true;
-                break;
-            case 'color':
-                if (typeof rule.value === 'string')
-                    result.colorOverride = rule.value;
-                break;
-            case 'bg':
-                if (typeof rule.value === 'string')
-                    result.bgOverride = rule.value;
-                break;
-            case 'bold':
-                if (typeof rule.value === 'boolean')
-                    result.boldOverride = rule.value;
-                break;
+        if (rule.do === 'hide') {
+            result.hide = true;
+            continue;
         }
+
+        // rule.do === 'setTag'
+        const tagStyle = item.tags?.[rule.tag];
+        if (!tagStyle) {
+            // Reference integrity is enforced at load time; if we get here
+            // the config was mutated at runtime past validation. Silently
+            // skip rather than crash the render.
+            continue;
+        }
+        if (tagStyle.color !== undefined && result.colorOverride === undefined)
+            result.colorOverride = tagStyle.color;
+        if (tagStyle.backgroundColor !== undefined && result.bgOverride === undefined)
+            result.bgOverride = tagStyle.backgroundColor;
+        if (tagStyle.bold !== undefined && result.boldOverride === undefined)
+            result.boldOverride = tagStyle.bold;
     }
 
     return result;
@@ -110,8 +125,8 @@ export function evaluateWhen(
 
 /**
  * True if any rule in the list uses a predicate that requires rendered text
- * (currently only `empty`). Callers use this to decide whether a post-render
- * evaluation pass is needed after the pre-render `skipEmpty` pass.
+ * (currently only `core.empty`). Callers use this to decide whether a
+ * post-render evaluation pass is needed after the pre-render `skipEmpty` pass.
  */
 export function hasEmptyPredicate(rules: WhenRule[] | undefined): boolean {
     return rules?.some(rule => predicateNeedsRenderedText(rule.on)) ?? false;

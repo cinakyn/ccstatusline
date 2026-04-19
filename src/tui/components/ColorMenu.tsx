@@ -33,9 +33,17 @@ export interface ColorMenuProps {
     settings: Settings;
     onUpdate: (widgets: WidgetItem[]) => void;
     onBack: () => void;
+    /**
+     * When set, every mutation performed by ColorMenu writes to
+     * `item.tags[tagKey]` instead of `item` (color / backgroundColor / bold).
+     * Reads are similarly redirected so the preview reflects the tag style.
+     * The internal UX (keybindings, layout, prompts) is otherwise unchanged.
+     */
+    tagKey?: string;
+    title?: string;
 }
 
-export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settings, onUpdate, onBack }) => {
+export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settings, onUpdate, onBack, tagKey, title }) => {
     const [showSeparators, setShowSeparators] = useState(false);
     const [hexInputMode, setHexInputMode] = useState(false);
     const [hexInput, setHexInput] = useState('');
@@ -55,11 +63,45 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
         // Include unknown widgets (they might support colors, we just don't know)
         return widgetInstance ? widgetInstance.supportsColors(widget) : true;
     });
-    const [highlightedItemId, setHighlightedItemId] = useState(colorableWidgets[0]?.id ?? null);
+
+    /**
+     * A single selectable row in the Color menu. Each colorable widget emits
+     * one `default` row (styling lives on the widget itself) plus one `tag`
+     * row per entry in `widget.tags` (styling lives at `widget.tags[tagKey]`).
+     * When the component is invoked with the legacy `props.tagKey` prop, it
+     * collapses to a single row per widget scoped to that tag — preserving
+     * the single-tag call site used by ItemsEditor.
+     */
+    interface ColorRow {
+        rowId: string;
+        widget: WidgetItem;
+        rowTagKey?: string;
+    }
+    const colorRows: ColorRow[] = (() => {
+        const rows: ColorRow[] = [];
+        for (const widget of colorableWidgets) {
+            if (tagKey) {
+                rows.push({ rowId: widget.id, widget, rowTagKey: tagKey });
+                continue;
+            }
+            rows.push({ rowId: widget.id, widget });
+            const canHaveTags = widget.type !== 'separator' && widget.type !== 'flex-separator';
+            if (!canHaveTags)
+                continue;
+            const tagNames = widget.tags ? Object.keys(widget.tags) : [];
+            for (const name of tagNames) {
+                rows.push({ rowId: `${widget.id}:${name}`, widget, rowTagKey: name });
+            }
+        }
+        return rows;
+    })();
+    const [highlightedItemId, setHighlightedItemId] = useState(colorRows[0]?.rowId ?? null);
     const [editingBackground, setEditingBackground] = useState(false);
 
+    const findRow = (rowId: string | null): ColorRow | undefined => rowId ? colorRows.find(row => row.rowId === rowId) : undefined;
+
     // Handle keyboard input
-    const hasNoItems = colorableWidgets.length === 0;
+    const hasNoItems = colorRows.length === 0;
     useInput((input, key) => {
         // If no items, any key goes back
         if (hasNoItems) {
@@ -85,9 +127,9 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
                 // Validate and apply the hex color
                 if (hexInput.length === 6) {
                     const hexColor = `hex:${hexInput}`;
-                    const selectedWidget = colorableWidgets.find(widget => widget.id === highlightedItemId);
-                    if (selectedWidget) {
-                        const newItems = setWidgetColor(widgets, selectedWidget.id, hexColor, editingBackground);
+                    const row = findRow(highlightedItemId);
+                    if (row) {
+                        const newItems = setWidgetColor(widgets, row.widget.id, hexColor, editingBackground, row.rowTagKey);
                         onUpdate(newItems);
                     }
                     setHexInputMode(false);
@@ -120,10 +162,10 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
                 if (!isNaN(code) && code >= 0 && code <= 255) {
                     const ansiColor = `ansi256:${code}`;
 
-                    const selectedWidget = colorableWidgets.find(widget => widget.id === highlightedItemId);
+                    const row = findRow(highlightedItemId);
 
-                    if (selectedWidget) {
-                        const newItems = setWidgetColor(widgets, selectedWidget.id, ansiColor, editingBackground);
+                    if (row) {
+                        const newItems = setWidgetColor(widgets, row.widget.id, ansiColor, editingBackground, row.rowTagKey);
 
                         onUpdate(newItems);
                         setAnsi256InputMode(false);
@@ -178,24 +220,24 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
                 // the initial index when rendering the SelectInput
             }
         } else if (input === 'f' || input === 'F') {
-            if (colorableWidgets.length > 0) {
+            if (colorRows.length > 0) {
                 setEditingBackground(!editingBackground);
             }
         } else if (input === 'b' || input === 'B') {
             if (highlightedItemId && highlightedItemId !== 'back') {
                 // Toggle bold for the highlighted item
-                const selectedWidget = colorableWidgets.find(widget => widget.id === highlightedItemId);
-                if (selectedWidget) {
-                    const newItems = toggleWidgetBold(widgets, selectedWidget.id);
+                const row = findRow(highlightedItemId);
+                if (row) {
+                    const newItems = toggleWidgetBold(widgets, row.widget.id, row.rowTagKey);
                     onUpdate(newItems);
                 }
             }
         } else if (input === 'r' || input === 'R') {
             if (highlightedItemId && highlightedItemId !== 'back') {
                 // Reset all styling (color, background, and bold) for the highlighted item
-                const selectedWidget = colorableWidgets.find(widget => widget.id === highlightedItemId);
-                if (selectedWidget) {
-                    const newItems = resetWidgetStyling(widgets, selectedWidget.id);
+                const row = findRow(highlightedItemId);
+                if (row) {
+                    const newItems = resetWidgetStyling(widgets, row.widget.id, row.rowTagKey);
                     onUpdate(newItems);
                 }
             }
@@ -205,15 +247,16 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
         } else if (key.leftArrow || key.rightArrow) {
             // Cycle through colors with arrow keys
             if (highlightedItemId && highlightedItemId !== 'back') {
-                const selectedWidget = colorableWidgets.find(widget => widget.id === highlightedItemId);
-                if (selectedWidget) {
+                const row = findRow(highlightedItemId);
+                if (row) {
                     const newItems = cycleWidgetColor({
                         widgets,
-                        widgetId: selectedWidget.id,
+                        widgetId: row.widget.id,
                         direction: key.rightArrow ? 'right' : 'left',
                         editingBackground,
                         colors,
-                        backgroundColors: bgColors
+                        backgroundColors: bgColors,
+                        tagKey: row.rowTagKey
                     });
                     onUpdate(newItems);
                 }
@@ -225,7 +268,7 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
         return (
             <Box flexDirection='column'>
                 <Text bold>
-                    Configure Colors
+                    {title ?? 'Configure Colors'}
                     {lineIndex !== undefined ? ` - Line ${lineIndex + 1}` : ''}
                 </Text>
                 <Box marginTop={1}><Text dimColor>No colorable widgets in the status line.</Text></Box>
@@ -258,8 +301,18 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
     const bgColors = bgColorOptions.map(c => c.value || '');
 
     // Create menu items with colored labels
-    const menuItems = colorableWidgets.map((widget, index) => {
-        const label = `${index + 1}: ${getItemLabel(widget)}`;
+    // Row numbering: widget rows get the 1-based index of their parent widget;
+    // tag rows display indented with a `· <tagName>` marker and no number, so
+    // the 1..9 number shortcuts in SelectInput still map 1:1 to widgets.
+    let widgetDisplayIndex = 0;
+    const menuItems = colorRows.map((row) => {
+        const { widget, rowTagKey } = row;
+        const isTagRow = rowTagKey !== undefined && !tagKey;
+        if (!isTagRow)
+            widgetDisplayIndex += 1;
+        const label = isTagRow
+            ? `    · ${rowTagKey}`
+            : `${widgetDisplayIndex}: ${getItemLabel(widget)}`;
         // Apply both foreground and background colors
         const level = getColorLevelString(settings.colorLevel);
         let defaultColor = 'white';
@@ -269,10 +322,15 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
                 defaultColor = widgetImpl.getDefaultColor();
             }
         }
-        const styledLabel = applyColors(label, widget.color ?? defaultColor, widget.backgroundColor, widget.bold, level);
+        const effectiveTagKey = rowTagKey;
+        const tagStyle = effectiveTagKey ? widget.tags?.[effectiveTagKey] : undefined;
+        const fgRead = effectiveTagKey ? tagStyle?.color : widget.color;
+        const bgRead = effectiveTagKey ? tagStyle?.backgroundColor : widget.backgroundColor;
+        const boldRead = effectiveTagKey ? tagStyle?.bold : widget.bold;
+        const styledLabel = applyColors(label, fgRead ?? defaultColor, bgRead, boldRead, level);
         return {
             label: styledLabel,
-            value: widget.id
+            value: row.rowId
         };
     });
     menuItems.push({ label: '← Back', value: 'back' });
@@ -289,12 +347,18 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
     };
 
     // Get current color for highlighted item
-    const selectedWidget = highlightedItemId && highlightedItemId !== 'back'
-        ? colorableWidgets.find(widget => widget.id === highlightedItemId)
-        : null;
+    const selectedRow = highlightedItemId && highlightedItemId !== 'back'
+        ? findRow(highlightedItemId)
+        : undefined;
+    const selectedWidget = selectedRow?.widget ?? null;
+    const selectedRowTagKey = selectedRow?.rowTagKey;
+    const selectedTagStyle = selectedRowTagKey && selectedWidget ? selectedWidget.tags?.[selectedRowTagKey] : undefined;
+    const selectedFgRead = selectedRowTagKey ? selectedTagStyle?.color : selectedWidget?.color;
+    const selectedBgRead = selectedRowTagKey ? selectedTagStyle?.backgroundColor : selectedWidget?.backgroundColor;
+    const selectedBoldRead = selectedRowTagKey ? selectedTagStyle?.bold : selectedWidget?.bold;
     const currentColor = editingBackground
-        ? (selectedWidget?.backgroundColor ?? '')  // Empty string for 'none'
-        : (selectedWidget ? (selectedWidget.color ?? (() => {
+        ? (selectedBgRead ?? '')  // Empty string for 'none'
+        : (selectedWidget ? (selectedFgRead ?? (() => {
             if (selectedWidget.type !== 'separator' && selectedWidget.type !== 'flex-separator') {
                 const widgetImpl = getWidget(selectedWidget.type);
                 return widgetImpl ? widgetImpl.getDefaultColor() : 'white';
@@ -363,7 +427,7 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
                     <ConfirmDialog
                         inline={true}
                         onConfirm={() => {
-                            const newItems = clearAllWidgetStyling(widgets);
+                            const newItems = clearAllWidgetStyling(widgets, tagKey);
                             onUpdate(newItems);
                             setShowClearConfirm(false);
                         }}
@@ -393,7 +457,7 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
         <Box flexDirection='column'>
             <Box>
                 <Text bold>
-                    Configure Colors
+                    {title ?? 'Configure Colors'}
                     {lineIndex !== undefined ? ` - Line ${lineIndex + 1}` : ''}
                     {editingBackground && chalk.yellow(' [Background Mode]')}
                 </Text>
@@ -454,7 +518,7 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ widgets, lineIndex, settin
                                 ):
                                 {' '}
                                 {colorDisplay}
-                                {selectedWidget.bold && chalk.bold(' [BOLD]')}
+                                {selectedBoldRead && chalk.bold(' [BOLD]')}
                             </Text>
                         </Box>
                     ) : (

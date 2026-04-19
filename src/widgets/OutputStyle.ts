@@ -1,12 +1,12 @@
 import type { RenderContext } from '../types/RenderContext';
 import type { Settings } from '../types/Settings';
 import type {
-    Widget,
+    StatefulWidget,
     WidgetEditorDisplay,
     WidgetItem
 } from '../types/Widget';
 
-export class OutputStyleWidget implements Widget {
+export class OutputStyleWidget implements StatefulWidget {
     getDefaultColor(): string { return 'cyan'; }
     getDescription(): string { return 'Shows the current Claude Code output style'; }
     getDisplayName(): string { return 'Output Style'; }
@@ -26,4 +26,13 @@ export class OutputStyleWidget implements Widget {
 
     supportsRawValue(): boolean { return true; }
     supportsColors(item: WidgetItem): boolean { return true; }
+
+    getStateKey(_item: WidgetItem, context: RenderContext): string | null {
+        const name = context.data?.output_style?.name;
+        return name ? name.toLowerCase() : null;
+    }
+
+    getAllStates(): string[] {
+        return ['default'];
+    }
 }

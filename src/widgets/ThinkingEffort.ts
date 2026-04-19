@@ -1,7 +1,7 @@
 import type { RenderContext } from '../types/RenderContext';
 import type { Settings } from '../types/Settings';
 import type {
-    Widget,
+    StatefulWidget,
     WidgetEditorDisplay,
     WidgetItem
 } from '../types/Widget';
@@ -39,7 +39,7 @@ function formatEffort(resolved: ResolvedThinkingEffort | null): string {
     return resolved.known ? resolved.value : `${resolved.value}?`;
 }
 
-export class ThinkingEffortWidget implements Widget {
+export class ThinkingEffortWidget implements StatefulWidget {
     getDefaultColor(): string { return 'magenta'; }
     getDescription(): string { return 'Displays the current thinking effort level (low, medium, high, xhigh, max).\nUnknown levels are shown with a trailing "?" (e.g. "super-max?").\nMay be incorrect when multiple Claude Code sessions are running due to current Claude Code limitations.'; }
     getDisplayName(): string { return 'Thinking Effort'; }
@@ -59,4 +59,15 @@ export class ThinkingEffortWidget implements Widget {
 
     supportsRawValue(): boolean { return true; }
     supportsColors(item: WidgetItem): boolean { return true; }
+
+    getStateKey(_item: WidgetItem, context: RenderContext): string | null {
+        const resolved = resolveThinkingEffort(context);
+        if (!resolved)
+            return 'none';
+        return resolved.value.toLowerCase();
+    }
+
+    getAllStates(): string[] {
+        return ['none', 'low', 'medium', 'high', 'xhigh', 'max'];
+    }
 }

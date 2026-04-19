@@ -9,14 +9,30 @@ import {
     WIDGET_MANIFEST
 } from './widget-manifest';
 
-// Create widget registry
-const widgetRegistry = new Map<WidgetItemType, Widget>(
-    WIDGET_MANIFEST.map((entry): [WidgetItemType, Widget] => [entry.type, entry.create()])
-);
-const layoutWidgetTypes = new Set<WidgetItemType>(LAYOUT_WIDGET_MANIFEST.map(entry => entry.type));
+// Lazy-initialize the widget registry. Doing the `.map()` at module
+// top-level would tie registry construction to module load order; a future
+// widget barrel entry importing from `when-catalog`/`when` (which already pull
+// `widget-manifest`) would form a cycle and observe `WIDGET_MANIFEST` as
+// still-undefined. Deferring materialisation to first-call is a cheap
+// defense-in-depth — no currently-shipping widget forms that cycle, but the
+// lazy init keeps the registry robust if one is added later.
+let widgetRegistry: Map<WidgetItemType, Widget> | null = null;
+let layoutWidgetTypes: Set<WidgetItemType> | null = null;
+
+function getWidgetRegistry(): Map<WidgetItemType, Widget> {
+    widgetRegistry ??= new Map<WidgetItemType, Widget>(
+        WIDGET_MANIFEST.map((entry): [WidgetItemType, Widget] => [entry.type, entry.create()])
+    );
+    return widgetRegistry;
+}
+
+function getLayoutWidgetTypes(): Set<WidgetItemType> {
+    layoutWidgetTypes ??= new Set<WidgetItemType>(LAYOUT_WIDGET_MANIFEST.map(entry => entry.type));
+    return layoutWidgetTypes;
+}
 
 export function getWidget(type: WidgetItemType): Widget | null {
-    return widgetRegistry.get(type) ?? null;
+    return getWidgetRegistry().get(type) ?? null;
 }
 
 export function getAllWidgetTypes(settings: Settings): WidgetItemType[] {
@@ -41,21 +57,26 @@ export interface WidgetCatalogEntry {
     searchText: string;
 }
 
-const layoutCatalogEntries = new Map<WidgetItemType, WidgetCatalogEntry>(
-    LAYOUT_WIDGET_MANIFEST.map((entry): [WidgetItemType, WidgetCatalogEntry] => [
-        entry.type,
-        {
-            type: entry.type,
-            displayName: entry.displayName,
-            description: entry.description,
-            category: entry.category,
-            searchText: `${entry.displayName} ${entry.description} ${entry.type}`.toLowerCase()
-        }
-    ])
-);
+let layoutCatalogEntries: Map<WidgetItemType, WidgetCatalogEntry> | null = null;
+
+function getLayoutCatalogEntries(): Map<WidgetItemType, WidgetCatalogEntry> {
+    layoutCatalogEntries ??= new Map<WidgetItemType, WidgetCatalogEntry>(
+        LAYOUT_WIDGET_MANIFEST.map((entry): [WidgetItemType, WidgetCatalogEntry] => [
+            entry.type,
+            {
+                type: entry.type,
+                displayName: entry.displayName,
+                description: entry.description,
+                category: entry.category,
+                searchText: `${entry.displayName} ${entry.description} ${entry.type}`.toLowerCase()
+            }
+        ])
+    );
+    return layoutCatalogEntries;
+}
 
 function getLayoutCatalogEntry(type: WidgetItemType): WidgetCatalogEntry | null {
-    return layoutCatalogEntries.get(type) ?? null;
+    return getLayoutCatalogEntries().get(type) ?? null;
 }
 
 export function getWidgetCatalog(settings: Settings): WidgetCatalogEntry[] {
@@ -361,6 +382,6 @@ export function getMatchSegments(text: string, query: string): { text: string; m
 }
 
 export function isKnownWidgetType(type: string): boolean {
-    return widgetRegistry.has(type)
-        || layoutWidgetTypes.has(type);
+    return getWidgetRegistry().has(type)
+        || getLayoutWidgetTypes().has(type);
 }

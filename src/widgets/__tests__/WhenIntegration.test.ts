@@ -57,7 +57,7 @@ describe('when integration', () => {
             id: '1',
             type: 'custom-text',
             customText: 'hello',
-            when: [{ on: 'no-git', do: 'hide' }]
+            when: [{ on: 'git.no-git', do: 'hide' }]
         };
 
         const result = preRenderAllWidgets(wrapAsLines([[widget]]), settings, ctx);
@@ -79,7 +79,7 @@ describe('when integration', () => {
             id: '1',
             type: 'custom-text',
             customText: 'hello',
-            when: [{ on: 'no-git', do: 'hide' }]
+            when: [{ on: 'git.no-git', do: 'hide' }]
         };
 
         const result = preRenderAllWidgets(wrapAsLines([[widget]]), settings, ctx);
@@ -97,7 +97,7 @@ describe('when integration', () => {
                 id: 'a',
                 type: 'custom-text',
                 customText: 'HIDE_ME',
-                when: [{ on: 'no-git', do: 'hide' }]
+                when: [{ on: 'git.no-git', do: 'hide' }]
             },
             { id: 'sep', type: 'separator' },
             { id: 'b', type: 'custom-text', customText: 'VISIBLE_B' }
@@ -123,7 +123,7 @@ describe('when integration', () => {
                 type: 'custom-text',
                 customText: 'A_TEXT',
                 merge: true,
-                when: [{ on: 'no-git', do: 'hide' }]
+                when: [{ on: 'git.no-git', do: 'hide' }]
             },
             { id: 'b', type: 'custom-text', customText: 'B_TEXT', merge: true },
             { id: 'c', type: 'custom-text', customText: 'C_TEXT' }
@@ -139,7 +139,7 @@ describe('when integration', () => {
         expect(plain).toContain('C_TEXT');
     });
 
-    it('git-branch with when:[no-remote,color,red] applies color override', () => {
+    it('git-branch with setTag rule applies tag color override', () => {
         // Inside git with a branch, but no upstream remote:
         //   - rev-parse --is-inside-work-tree -> 'true'
         //   - branch --show-current -> 'main'
@@ -165,7 +165,8 @@ describe('when integration', () => {
         const widget: WidgetItem = {
             id: '1',
             type: 'git-branch',
-            when: [{ on: 'no-remote', do: 'color', value: 'red' }]
+            tags: { alert: { color: 'red' } },
+            when: [{ on: 'git.no-remote', do: 'setTag', tag: 'alert' }]
         };
 
         const result = preRenderAllWidgets(wrapAsLines([[widget]]), settings, ctx);

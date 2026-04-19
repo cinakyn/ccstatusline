@@ -76,18 +76,18 @@ beforeEach(() => {
 
 type SettingsInput = Omit<Partial<Settings>, 'powerline'> & { powerline?: Partial<PowerlineConfig> };
 
-/** A widget whose `when: no-git → hide` rule fires when git throws. */
+/** A widget whose `when: git.no-git → hide` rule fires when git throws. */
 function hiddenWidget(id: string, text: string): {
     id: string;
     type: 'custom-text';
     customText: string;
-    when: [{ on: 'no-git'; do: 'hide' }];
+    when: [{ on: 'git.no-git'; do: 'hide' }];
 } {
     return {
         id,
         type: 'custom-text',
         customText: text,
-        when: [{ on: 'no-git', do: 'hide' }]
+        when: [{ on: 'git.no-git', do: 'hide' }]
     };
 }
 

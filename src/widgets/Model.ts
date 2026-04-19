@@ -1,12 +1,12 @@
 import type { RenderContext } from '../types/RenderContext';
 import type { Settings } from '../types/Settings';
 import type {
-    Widget,
+    StatefulWidget,
     WidgetEditorDisplay,
     WidgetItem
 } from '../types/Widget';
 
-export class ModelWidget implements Widget {
+export class ModelWidget implements StatefulWidget {
     getDefaultColor(): string { return 'cyan'; }
     getDescription(): string { return 'Displays the Claude model name (e.g., Claude 3.5 Sonnet)'; }
     getDisplayName(): string { return 'Model'; }
@@ -34,4 +34,23 @@ export class ModelWidget implements Widget {
 
     supportsRawValue(): boolean { return true; }
     supportsColors(item: WidgetItem): boolean { return true; }
+
+    getStateKey(_item: WidgetItem, context: RenderContext): string | null {
+        const model = context.data?.model;
+        const name = typeof model === 'string' ? model : (model?.id ?? model?.display_name);
+        if (!name)
+            return null;
+        const lower = name.toLowerCase();
+        if (lower.includes('opus'))
+            return 'opus';
+        if (lower.includes('sonnet'))
+            return 'sonnet';
+        if (lower.includes('haiku'))
+            return 'haiku';
+        return null;
+    }
+
+    getAllStates(): string[] {
+        return ['opus', 'sonnet', 'haiku'];
+    }
 }

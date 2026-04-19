@@ -620,7 +620,7 @@ describe('groups powerline render: groupGap is plain text', () => {
 // ---------------------------------------------------------------------------
 
 describe('groups powerline render: merge termination with hidden first widget', () => {
-    it('D has intact leading padding when C (first of group 1) is hidden via when:[no-git,hide]', () => {
+    it('D has intact leading padding when C (first of group 1) is hidden via when:[git.no-git,hide]', () => {
         // Layout:
         //   group 0: [A, B]
         //   group 1: [C (hidden when no-git), D (merge: 'no-padding')]
@@ -683,7 +683,7 @@ describe('groups powerline render: merge termination with hidden first widget', 
                             type: 'custom-text',
                             customText: 'C',
                             backgroundColor: 'bgGreen',
-                            when: [{ on: 'no-git', do: 'hide' }]
+                            when: [{ on: 'git.no-git', do: 'hide' }]
                         },
                         {
                             ...makeWidget('d', 'D', 'bgGreen'),

@@ -141,7 +141,7 @@ describe('config utilities', () => {
             expect.stringContaining(`config version ${futureVersion}`)
         );
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-            expect.stringContaining('.v3.bak')
+            expect.stringContaining('.v4.bak')
         );
     });
 
@@ -189,7 +189,12 @@ describe('config utilities', () => {
         };
         expect(migrated.version).toBe(CURRENT_VERSION);
         expect(migrated.updatemessage?.message).toContain('v2.0.2');
-        expect(consoleErrorSpy).not.toHaveBeenCalled();
+        // A pre-v4 config triggers a one-time backup whose path is logged via
+        // console.error for user visibility; the migration itself succeeded.
+        expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Pre-v4 settings backed up to')
+        );
     });
 
     it('always saves current version in saveSettings', async () => {
@@ -226,10 +231,10 @@ describe('config utilities', () => {
         const settings = await loadSettings();
         const widget = settings.lines[0]?.groups[0]?.widgets[0];
 
-        expect(widget?.when).toEqual([{ on: 'no-git', do: 'hide' }]);
+        expect(widget?.when).toEqual([{ on: 'git.no-git', do: 'hide' }]);
         // Metadata is preserved alongside the synthesized when rule so the
         // widget-level `!branch` fallback (detached HEAD, empty repo) keeps
-        // hiding — the `no-git` predicate only covers `!isInsideGitWorkTree`.
+        // hiding — the `git.no-git` predicate only covers `!isInsideGitWorkTree`.
         expect(widget?.metadata).toEqual({ hideNoGit: 'true', linkToGitHub: 'true' });
 
         interface OnDiskWidget { metadata?: Record<string, string>; when?: unknown }

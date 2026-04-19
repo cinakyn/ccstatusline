@@ -1186,7 +1186,7 @@ export function preRenderAllWidgets(
 
             // Pre-render pass: evaluate non-empty predicates first (they don't need rendered text).
             // If any `hide` rule matches here, we can skip the render call entirely.
-            const preRenderEval = evaluateWhen(widget.when, context, '', { skipEmpty: true });
+            const preRenderEval = evaluateWhen(widget.when, widget, context, settings, '', { skipEmpty: true });
             if (preRenderEval.hide) {
                 preRenderedLine.push({
                     content: '',
@@ -1210,7 +1210,7 @@ export function preRenderAllWidgets(
             if (hasEmptyPredicate(widget.when)) {
                 // Pass onlyEmpty so we don't re-evaluate (or re-log) non-empty rules
                 // that already ran in the pre-render pass.
-                const postEval = evaluateWhen(widget.when, context, widgetText, { onlyEmpty: true });
+                const postEval = evaluateWhen(widget.when, widget, context, settings, widgetText, { onlyEmpty: true });
                 if (postEval.hide)
                     finalHidden = true;
                 colorOverride = postEval.colorOverride ?? colorOverride;

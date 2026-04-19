@@ -15,6 +15,7 @@ import {
     needsMigration,
     rewriteLegacyHideFlags
 } from './migrations';
+import { validateWhenRulesInSettings } from './when-catalog';
 
 // Use fs.promises directly (always available in modern Node.js)
 const readFile = fs.promises.readFile;
@@ -42,6 +43,7 @@ interface SettingsPaths {
     settingsPath: string;
     settingsBackupPath: string;
     v3BackupPath: string;
+    v4BackupPath: string;
 }
 
 function getSettingsPaths(): SettingsPaths {
@@ -50,12 +52,16 @@ function getSettingsPaths(): SettingsPaths {
     const backupBaseName = parsedPath.ext
         ? `${parsedPath.name}.bak`
         : `${parsedPath.base}.bak`;
+    const v4BackupBaseName = parsedPath.ext
+        ? `${parsedPath.name}.v4.bak`
+        : `${parsedPath.base}.v4.bak`;
 
     return {
         configDir,
         settingsPath,
         settingsBackupPath: path.join(configDir, backupBaseName),
-        v3BackupPath: path.join(configDir, `${parsedPath.base}.v3.bak`)
+        v3BackupPath: path.join(configDir, `${parsedPath.base}.v3.bak`),
+        v4BackupPath: path.join(configDir, v4BackupBaseName)
     };
 }
 
@@ -73,6 +79,39 @@ async function backupBadSettings(paths: SettingsPaths): Promise<void> {
         }
     } catch (error) {
         console.error('Failed to backup bad settings:', error);
+    }
+}
+
+/**
+ * Before the v3→v4 (tags + setTag) migration rewrites `alternateColors` and
+ * legacy `{color,bg,bold}` when-rules in place, copy the untouched settings
+ * file to `<name>.v4.bak` so users can recover the original shape if the
+ * migration's choices aren't what they wanted. Only runs once per config —
+ * skipped if the file is already v4+ or the backup already exists.
+ */
+async function writePreV4BackupIfNeeded(
+    rawData: unknown,
+    originalContent: string,
+    paths: SettingsPaths
+): Promise<void> {
+    const currentVersion = typeof rawData === 'object' && rawData !== null
+        && 'version' in rawData && typeof (rawData as { version?: unknown }).version === 'number'
+        ? (rawData as { version: number }).version
+        : 0;
+    if (currentVersion >= 4)
+        return;
+    try {
+        await mkdir(paths.configDir, { recursive: true });
+        // Use O_EXCL (`flag:'wx'`) instead of an existsSync→writeFile guard so
+        // concurrent loadSettings calls can't both see "no backup", race past
+        // the check, and overwrite each other. First writer wins; losers see
+        // EEXIST and silently skip.
+        await writeFile(paths.v4BackupPath, originalContent, { encoding: 'utf-8', flag: 'wx' });
+        console.error(`Pre-v4 settings backed up to ${paths.v4BackupPath}`);
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST')
+            return;
+        console.error('Failed to write pre-v4 settings backup:', error);
     }
 }
 
@@ -152,7 +191,7 @@ export async function loadSettings(): Promise<Settings> {
                 + `(config version ${preMigrationVersion}); this binary expects version `
                 + `${CURRENT_VERSION} or lower. Using in-memory defaults for this run and `
                 + `leaving the file untouched. If you did not mean to downgrade, upgrade the `
-                + `binary or copy ${paths.v3BackupPath} back over `
+                + `binary or copy ${paths.v4BackupPath} (or ${paths.v3BackupPath}) back over `
                 + `${paths.settingsPath}.`
             );
             return SettingsSchema.parse({});
@@ -167,6 +206,7 @@ export async function loadSettings(): Promise<Settings> {
             }
 
             // Migrate v1 to current version and save the migrated settings back to disk
+            await writePreV4BackupIfNeeded(rawData, content, paths);
             rawData = migrateConfig(rawData, CURRENT_VERSION);
             await writeSettingsJson(rawData, paths);
         } else if (needsMigration(rawData, CURRENT_VERSION)) {
@@ -176,6 +216,7 @@ export async function loadSettings(): Promise<Settings> {
                 await backupV3Settings(paths);
 
             // Handle migrations for versioned configs (v2+) and save the migrated settings back to disk
+            await writePreV4BackupIfNeeded(rawData, content, paths);
             rawData = migrateConfig(rawData, CURRENT_VERSION);
             await writeSettingsJson(rawData, paths);
         }
@@ -199,6 +240,18 @@ export async function loadSettings(): Promise<Settings> {
                 }))
             }))
         };
+
+        // Load-time validation: every `when` rule must reference a known
+        // predicate that applies to its widget, and every `setTag` rule must
+        // point at an existing tag on the same item. Surface these as a
+        // fatal error rather than silently dropping them at render time.
+        const whenErrors = validateWhenRulesInSettings(settings.lines);
+        if (whenErrors.length > 0) {
+            console.error(
+                `Settings validation failed for 'when' rules:\n  - ${whenErrors.join('\n  - ')}`
+            );
+            return await recoverWithDefaults(paths);
+        }
 
         return settings;
     } catch (error) {

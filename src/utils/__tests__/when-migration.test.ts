@@ -15,10 +15,10 @@ describe('rewriteLegacyHideFlags', () => {
         expect(rewriteLegacyHideFlags(i)).toEqual(i);
     });
 
-    it('rewrites hideNoGit="true" to when[no-git, hide] and preserves the metadata flag', () => {
+    it('rewrites hideNoGit="true" to when[git.no-git, hide] and preserves the metadata flag', () => {
         const i = item({ metadata: { hideNoGit: 'true' } });
         const r = rewriteLegacyHideFlags(i);
-        expect(r.when).toEqual([{ on: 'no-git', do: 'hide' }]);
+        expect(r.when).toEqual([{ on: 'git.no-git', do: 'hide' }]);
         // Metadata must survive so the widget-level `!branch` fallback (detached
         // HEAD, empty-repo) keeps hiding — the predicate only covers
         // `!isInsideGitWorkTree`.
@@ -32,9 +32,9 @@ describe('rewriteLegacyHideFlags', () => {
         });
         const r = rewriteLegacyHideFlags(i);
         expect(r.when).toEqual([
-            { on: 'no-remote', do: 'hide' },
-            { on: 'not-fork', do: 'hide' },
-            { on: 'empty', do: 'hide' }
+            { on: 'git.no-remote', do: 'hide' },
+            { on: 'git.not-fork', do: 'hide' },
+            { on: 'core.empty', do: 'hide' }
         ]);
     });
 
@@ -47,21 +47,22 @@ describe('rewriteLegacyHideFlags', () => {
     it('dedupes when legacy flag and equivalent when rule both present', () => {
         const i = item({
             metadata: { hideNoGit: 'true' },
-            when: [{ on: 'no-git', do: 'hide' }]
+            when: [{ on: 'git.no-git', do: 'hide' }]
         });
         const r = rewriteLegacyHideFlags(i);
-        expect(r.when).toEqual([{ on: 'no-git', do: 'hide' }]);
+        expect(r.when).toEqual([{ on: 'git.no-git', do: 'hide' }]);
     });
 
     it('appends to existing when array without clobbering', () => {
         const i = item({
             metadata: { hideNoGit: 'true' },
-            when: [{ on: 'no-remote', do: 'color', value: 'red' }]
+            when: [{ on: 'git.no-remote', do: 'setTag', tag: 'alert' }],
+            tags: { alert: { color: 'red' } }
         });
         const r = rewriteLegacyHideFlags(i);
         expect(r.when).toEqual([
-            { on: 'no-remote', do: 'color', value: 'red' },
-            { on: 'no-git', do: 'hide' }
+            { on: 'git.no-remote', do: 'setTag', tag: 'alert' },
+            { on: 'git.no-git', do: 'hide' }
         ]);
     });
 
@@ -69,7 +70,7 @@ describe('rewriteLegacyHideFlags', () => {
         const i = item({ metadata: { hideNoGit: 'true', linkToGitHub: 'true' } });
         const r = rewriteLegacyHideFlags(i);
         expect(r.metadata).toEqual({ hideNoGit: 'true', linkToGitHub: 'true' });
-        expect(r.when).toEqual([{ on: 'no-git', do: 'hide' }]);
+        expect(r.when).toEqual([{ on: 'git.no-git', do: 'hide' }]);
     });
 
     it('keeps the legacy metadata flag so the widget-level `!branch` fallback still hides detached-HEAD / empty-repo', () => {

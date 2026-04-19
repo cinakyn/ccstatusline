@@ -5,6 +5,7 @@ export { GitChangesWidget } from './GitChanges';
 export { GitInsertionsWidget } from './GitInsertions';
 export { GitDeletionsWidget } from './GitDeletions';
 export { GitRootDirWidget } from './GitRootDir';
+export { GitMainWorktreeRootDirWidget } from './GitMainWorktreeRootDir';
 export { GitPrWidget } from './GitPr';
 export { GitWorktreeWidget } from './GitWorktree';
 export { GitStatusWidget } from './GitStatus';

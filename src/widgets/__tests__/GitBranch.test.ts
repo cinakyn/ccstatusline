@@ -119,6 +119,13 @@ describe('GitBranchWidget', () => {
         expect(render()).toBe('⎇ no git');
     });
 
+    it('hides when hideNoGit is set and we are in a repo with no branch (detached HEAD / empty repo)', () => {
+        mockExecSync.mockReturnValueOnce('true\n');
+        mockExecSync.mockReturnValueOnce('');
+
+        expect(render({ hideNoGit: true })).toBeNull();
+    });
+
     it('should render no git when command fails', () => {
         mockExecSync.mockImplementation(() => { throw new Error('No git'); });
 

@@ -57,24 +57,52 @@ export function applyCustomPowerlineTheme(
         return null;
     }
 
+    // Mirror renderer's color-cycling semantics so the copy matches what the
+    // non-custom theme was rendering:
+    //   - merge chains share a color slot (don't advance index on merged widgets)
+    //   - group.continuousColor === false resets the index at group boundary
+    //   - powerline.continueThemeAcrossLines carries the index across lines
+    const continueAcrossLines = settings.powerline.continueThemeAcrossLines;
+    let globalColorIndex = 0;
+
     const lines = settings.lines.map((line) => {
-        let widgetColorIndex = 0;
+        const lineStartIndex = continueAcrossLines ? globalColorIndex : 0;
+        let widgetColorIndex = lineStartIndex;
+        let isFirstGroup = true;
 
-        return line.map((widget) => {
-            if (widget.type === 'separator' || widget.type === 'flex-separator') {
-                return widget;
+        const groups = line.groups.map((group) => {
+            if (!group.continuousColor) {
+                widgetColorIndex = lineStartIndex;
             }
+            let renderedInGroup = 0;
+            const widgets = group.widgets.map((widget) => {
+                if (widget.type === 'separator' || widget.type === 'flex-separator') {
+                    return widget;
+                }
 
-            const fgColor = themeColors.fg[widgetColorIndex % themeColors.fg.length];
-            const bgColor = themeColors.bg[widgetColorIndex % themeColors.bg.length];
-            widgetColorIndex++;
+                const fgColor = themeColors.fg[widgetColorIndex % themeColors.fg.length];
+                const bgColor = themeColors.bg[widgetColorIndex % themeColors.bg.length];
 
-            return {
-                ...widget,
-                color: fgColor,
-                backgroundColor: bgColor
-            };
+                const isGroupBoundaryFirst = !isFirstGroup && renderedInGroup === 0;
+                renderedInGroup++;
+                if (!widget.merge || isGroupBoundaryFirst) {
+                    widgetColorIndex++;
+                }
+
+                return {
+                    ...widget,
+                    color: fgColor,
+                    backgroundColor: bgColor
+                };
+            });
+            if (renderedInGroup > 0) {
+                isFirstGroup = false;
+            }
+            return { ...group, widgets };
         });
+
+        globalColorIndex = widgetColorIndex;
+        return { ...line, groups };
     });
 
     return {

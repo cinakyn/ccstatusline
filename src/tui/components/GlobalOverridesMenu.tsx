@@ -5,15 +5,32 @@ import {
 } from 'ink';
 import React, { useState } from 'react';
 
+import type { Line } from '../../types/Group';
 import type { Settings } from '../../types/Settings';
+import type { WidgetItem } from '../../types/Widget';
 import {
     COLOR_MAP,
     getChalkColor,
     getColorDisplayName
 } from '../../utils/colors';
+import { lineWidgets } from '../../utils/groups';
 import { shouldInsertInput } from '../../utils/input-guards';
 
 import { ConfirmDialog } from './ConfirmDialog';
+
+/**
+ * Rebuild lines by filtering widgets out of each group while preserving
+ * per-group `gap`/`continuousColor`. Groups that become empty are dropped
+ * so the rendered output has no trailing artifacts.
+ */
+function filterLineWidgetsInPlace(lines: Line[], keep: (w: WidgetItem) => boolean): Line[] {
+    return lines.map(line => ({
+        ...line,
+        groups: line.groups
+            .map(group => ({ ...group, widgets: group.widgets.filter(keep) }))
+            .filter(group => group.widgets.length > 0)
+    }));
+}
 
 export interface GlobalOverridesMenuProps {
     settings: Settings;
@@ -33,7 +50,7 @@ export const GlobalOverridesMenu: React.FC<GlobalOverridesMenuProps> = ({ settin
     const isPowerlineEnabled = settings.powerline.enabled;
 
     // Check if there are any manual separators in the current configuration
-    const hasManualSeparators = settings.lines.some(line => line.some(item => item.type === 'separator')
+    const hasManualSeparators = settings.lines.some(line => lineWidgets(line).some(item => item.type === 'separator')
     );
 
     // Get colors from COLOR_MAP
@@ -75,7 +92,7 @@ export const GlobalOverridesMenu: React.FC<GlobalOverridesMenuProps> = ({ settin
                         defaultSeparator: separatorInput || undefined,
                         // Only remove manual separators if we're setting a non-empty default
                         lines: separatorInput
-                            ? settings.lines.map(line => line.filter(item => item.type !== 'separator'))
+                            ? filterLineWidgetsInPlace(settings.lines, item => item.type !== 'separator')
                             : settings.lines
                     };
                     onUpdate(updatedSettings);
@@ -210,8 +227,7 @@ export const GlobalOverridesMenu: React.FC<GlobalOverridesMenuProps> = ({ settin
                                 const updatedSettings = {
                                     ...settings,
                                     defaultSeparator: separatorInput,
-                                    lines: settings.lines.map(line => line.filter(item => item.type !== 'separator')
-                                    )
+                                    lines: filterLineWidgetsInPlace(settings.lines, item => item.type !== 'separator')
                                 };
                                 onUpdate(updatedSettings);
                                 setConfirmingSeparator(false);

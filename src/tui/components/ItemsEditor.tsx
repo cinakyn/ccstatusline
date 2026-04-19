@@ -3,7 +3,10 @@ import {
     Text,
     useInput
 } from 'ink';
-import React, { useState } from 'react';
+import React, {
+    useMemo,
+    useState
+} from 'react';
 
 import type { Settings } from '../../types/Settings';
 import type {
@@ -14,6 +17,7 @@ import type {
 } from '../../types/Widget';
 import { getBackgroundColorsForPowerline } from '../../utils/colors';
 import { generateGuid } from '../../utils/guid';
+import { shouldInsertInput } from '../../utils/input-guards';
 import { canDetectTerminalWidth } from '../../utils/terminal';
 import {
     filterWidgetCatalog,
@@ -23,32 +27,81 @@ import {
     getWidgetCatalogCategories
 } from '../../utils/widgets';
 
+import { ColorMenu } from './ColorMenu';
 import { ConfirmDialog } from './ConfirmDialog';
+import { WidgetWhenEditor } from './WidgetWhenEditor';
 import {
     handleMoveInputMode,
-    handleNormalInputMode,
     handlePickerInputMode,
     normalizePickerState,
     type CustomEditorWidgetState,
+    type InputKey,
     type WidgetPickerAction,
     type WidgetPickerState
 } from './items-editor/input-handlers';
+import {
+    addTag,
+    countTagReferences,
+    deleteTag,
+    makeAutoTagName,
+    renameTag,
+    validateTagRename
+} from './items-editor/tag-mutations';
+import {
+    buildWidgetRows,
+    findWidgetRowIndex,
+    type WidgetRow
+} from './items-editor/widget-rows';
 
 export interface ItemsEditorProps {
     widgets: WidgetItem[];
     onUpdate: (widgets: WidgetItem[]) => void;
     onBack: () => void;
     lineNumber: number;
+    /** When set, the editor is operating on a specific group (groupsEnabled=true). */
+    groupNumber?: number;
     settings: Settings;
 }
 
-export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onBack, lineNumber, settings }) => {
+interface ColorMenuContext {
+    widgetId: string;
+    tagKey?: string;
+}
+
+interface TagRenameContext {
+    widgetIndex: number;
+    tagName: string;
+    input: string;
+    error: string | null;
+}
+
+interface TagDeleteContext {
+    widgetIndex: number;
+    tagName: string;
+    refCount: number;
+}
+
+interface WhenEditorContext { widgetIndex: number }
+
+export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onBack, lineNumber, groupNumber, settings }) => {
+    // `selectedIndex` indexes into the flat `rows` list (widgets + tag variants
+    // + add-tag affordances), not `widgets` directly. `activeWidgetIndex`
+    // converts back to the widget-level selection and is what widget-scoped
+    // operations (move, delete, merge, raw-value toggle, …) key off of.
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [moveMode, setMoveMode] = useState(false);
     const [customEditorWidget, setCustomEditorWidget] = useState<CustomEditorWidgetState | null>(null);
     const [widgetPicker, setWidgetPicker] = useState<WidgetPickerState | null>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const [colorMenuContext, setColorMenuContext] = useState<ColorMenuContext | null>(null);
+    const [tagRename, setTagRename] = useState<TagRenameContext | null>(null);
+    const [tagDelete, setTagDelete] = useState<TagDeleteContext | null>(null);
+    const [whenEditor, setWhenEditor] = useState<WhenEditorContext | null>(null);
     const separatorChars = ['|', '-', ',', ' '];
+
+    const rows = useMemo(() => buildWidgetRows(widgets), [widgets]);
+    const selectedRow: WidgetRow | undefined = rows[Math.min(selectedIndex, Math.max(rows.length - 1, 0))];
+    const activeWidgetIndex = selectedRow?.widgetIndex ?? 0;
 
     const widgetCatalog = getWidgetCatalog(settings);
     const widgetCategories = ['All', ...getWidgetCatalogCategories(widgetCatalog)];
@@ -86,7 +139,7 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
 
     const handleEditorComplete = (updatedWidget: WidgetItem) => {
         const newWidgets = [...widgets];
-        newWidgets[selectedIndex] = updatedWidget;
+        newWidgets[activeWidgetIndex] = updatedWidget;
         onUpdate(newWidgets);
         setCustomEditorWidget(null);
     };
@@ -108,7 +161,7 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
             return;
         }
 
-        const currentType = widgets[selectedIndex]?.type;
+        const currentType = widgets[activeWidgetIndex]?.type;
         const selectedType = action === 'change' ? currentType ?? null : null;
 
         setWidgetPicker(normalizePickerState({
@@ -127,16 +180,16 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
         }
 
         if (widgetPicker.action === 'change') {
-            const currentWidget = widgets[selectedIndex];
+            const currentWidget = widgets[activeWidgetIndex];
             if (currentWidget) {
                 const newWidgets = [...widgets];
-                newWidgets[selectedIndex] = { ...currentWidget, type: selectedType };
+                newWidgets[activeWidgetIndex] = { ...currentWidget, type: selectedType };
                 onUpdate(newWidgets);
             }
         } else {
             const insertIndex = widgetPicker.action === 'add'
-                ? (widgets.length > 0 ? selectedIndex + 1 : 0)
-                : selectedIndex;
+                ? (widgets.length > 0 ? activeWidgetIndex + 1 : 0)
+                : activeWidgetIndex;
             const backgroundColor = getUniqueBackgroundColor(insertIndex);
             const newWidget: WidgetItem = {
                 id: generateGuid(),
@@ -146,20 +199,258 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
             const newWidgets = [...widgets];
             newWidgets.splice(insertIndex, 0, newWidget);
             onUpdate(newWidgets);
-            setSelectedIndex(insertIndex);
+            // Place selection on the new widget row in the rebuilt row list.
+            const nextRows = buildWidgetRows(newWidgets);
+            const targetRow = findWidgetRowIndex(nextRows, insertIndex);
+            setSelectedIndex(targetRow >= 0 ? targetRow : 0);
         }
 
         setWidgetPicker(null);
     };
 
-    useInput((input, key) => {
-        // Skip input if custom editor is active
-        if (customEditorWidget) {
+    const handleTagRenameInput = (input: string, key: InputKey) => {
+        if (!tagRename)
+            return;
+        if (key.escape) {
+            setTagRename(null);
+            return;
+        }
+        if (key.return) {
+            const currentItem = widgets[tagRename.widgetIndex];
+            if (!currentItem) {
+                setTagRename(null);
+                return;
+            }
+            const proposed = tagRename.input.trim();
+            const err = validateTagRename(currentItem, tagRename.tagName, proposed);
+            if (err === null) {
+                if (proposed !== tagRename.tagName) {
+                    const newWidgets = [...widgets];
+                    newWidgets[tagRename.widgetIndex] = renameTag(currentItem, tagRename.tagName, proposed);
+                    onUpdate(newWidgets);
+                }
+                setTagRename(null);
+            } else {
+                const message = err === 'empty'
+                    ? 'Name cannot be empty'
+                    : err === 'duplicate'
+                        ? 'A tag with that name already exists'
+                        : 'Tag no longer exists';
+                setTagRename({ ...tagRename, error: message });
+            }
+            return;
+        }
+        if (key.backspace || key.delete) {
+            setTagRename({ ...tagRename, input: tagRename.input.slice(0, -1), error: null });
+            return;
+        }
+        if (shouldInsertInput(input, key)) {
+            setTagRename({ ...tagRename, input: tagRename.input + input, error: null });
+        }
+    };
+
+    const handleRowInput = (input: string, key: InputKey) => {
+        if (!selectedRow) {
+            if (key.escape) {
+                onBack();
+                return;
+            }
+            if (input === 'a') {
+                openWidgetPicker('add');
+                return;
+            }
+            if (input === 'i') {
+                openWidgetPicker('insert');
+            }
             return;
         }
 
-        // Skip input handling when clear confirmation is active - let ConfirmDialog handle it
-        if (showClearConfirm) {
+        const moveUp = () => { setSelectedIndex(Math.max(0, selectedIndex - 1)); };
+        const moveDown = () => { setSelectedIndex(Math.min(rows.length - 1, selectedIndex + 1)); };
+
+        if (key.upArrow) {
+            moveUp();
+            return;
+        }
+        if (key.downArrow) {
+            moveDown();
+            return;
+        }
+        if (key.escape) {
+            onBack();
+            return;
+        }
+
+        if (selectedRow.kind === 'widget') {
+            handleWidgetRowInput(input, key, selectedRow);
+            return;
+        }
+        if (selectedRow.kind === 'tag') {
+            handleTagRowInput(input, key, selectedRow);
+            return;
+        }
+        // addTag row
+        if (key.return || input === 'a') {
+            createAndEditNewTag(selectedRow.widgetIndex);
+        }
+    };
+
+    const handleWidgetRowInput = (input: string, key: InputKey, row: Extract<WidgetRow, { kind: 'widget' }>) => {
+        const currentWidget = row.widget;
+        const isSeparator = currentWidget.type === 'separator';
+        const isFlexSeparator = currentWidget.type === 'flex-separator';
+
+        if (key.leftArrow || key.rightArrow) {
+            openWidgetPicker('change');
+            return;
+        }
+        if (key.return) {
+            setMoveMode(true);
+            return;
+        }
+        if (input === 'a') {
+            openWidgetPicker('add');
+            return;
+        }
+        if (input === 'i') {
+            openWidgetPicker('insert');
+            return;
+        }
+        if (input === 'n' && !isSeparator && !isFlexSeparator) {
+            setWhenEditor({ widgetIndex: row.widgetIndex });
+            return;
+        }
+        if (input === 'd') {
+            const newWidgets = widgets.filter((_, i) => i !== row.widgetIndex);
+            onUpdate(newWidgets);
+            const nextRows = buildWidgetRows(newWidgets);
+            // Clamp selection to the closest remaining widget row.
+            const clamped = Math.min(selectedIndex, Math.max(nextRows.length - 1, 0));
+            setSelectedIndex(Math.max(0, clamped));
+            return;
+        }
+        if (input === 'c') {
+            if (widgets.length > 0) {
+                setShowClearConfirm(true);
+            }
+            return;
+        }
+        if (input === ' ' && isSeparator) {
+            const currentChar = currentWidget.character ?? '|';
+            const currentCharIndex = separatorChars.indexOf(currentChar);
+            const nextChar = separatorChars[(currentCharIndex + 1) % separatorChars.length];
+            const newWidgets = [...widgets];
+            newWidgets[row.widgetIndex] = { ...currentWidget, character: nextChar };
+            onUpdate(newWidgets);
+            return;
+        }
+        if (input === 'r' && !isSeparator && !isFlexSeparator) {
+            const widgetImpl = getWidget(currentWidget.type);
+            if (!widgetImpl?.supportsRawValue()) {
+                return;
+            }
+            const newWidgets = [...widgets];
+            newWidgets[row.widgetIndex] = { ...currentWidget, rawValue: !currentWidget.rawValue };
+            onUpdate(newWidgets);
+            return;
+        }
+        if (input === 'm' && !isSeparator && !isFlexSeparator) {
+            if (row.widgetIndex < widgets.length - 1) {
+                const newWidgets = [...widgets];
+                let nextMergeState: boolean | 'no-padding' | undefined;
+                if (currentWidget.merge === undefined) {
+                    nextMergeState = true;
+                } else if (currentWidget.merge === true) {
+                    nextMergeState = 'no-padding';
+                } else {
+                    nextMergeState = undefined;
+                }
+                if (nextMergeState === undefined) {
+                    const { merge, ...rest } = currentWidget;
+                    void merge;
+                    newWidgets[row.widgetIndex] = rest;
+                } else {
+                    newWidgets[row.widgetIndex] = { ...currentWidget, merge: nextMergeState };
+                }
+                onUpdate(newWidgets);
+            }
+            return;
+        }
+
+        // Custom keybinds from the widget implementation.
+        if (!isSeparator && !isFlexSeparator) {
+            const widgetImpl = getWidget(currentWidget.type);
+            if (!widgetImpl?.getCustomKeybinds)
+                return;
+            const customKeybinds = getCustomKeybindsForWidget(widgetImpl, currentWidget);
+            const matchedKeybind = customKeybinds.find(kb => kb.key === input);
+            if (matchedKeybind && !key.ctrl) {
+                if (widgetImpl.handleEditorAction) {
+                    const updatedWidget = widgetImpl.handleEditorAction(matchedKeybind.action, currentWidget);
+                    if (updatedWidget) {
+                        const newWidgets = [...widgets];
+                        newWidgets[row.widgetIndex] = updatedWidget;
+                        onUpdate(newWidgets);
+                    } else if (widgetImpl.renderEditor) {
+                        setCustomEditorWidget({ widget: currentWidget, impl: widgetImpl, action: matchedKeybind.action });
+                    }
+                } else if (widgetImpl.renderEditor) {
+                    setCustomEditorWidget({ widget: currentWidget, impl: widgetImpl, action: matchedKeybind.action });
+                }
+            }
+        }
+    };
+
+    const handleTagRowInput = (input: string, key: InputKey, row: Extract<WidgetRow, { kind: 'tag' }>) => {
+        if (key.return || input === 'e') {
+            setColorMenuContext({ widgetId: row.widget.id, tagKey: row.tagName });
+            return;
+        }
+        if (input === 'r') {
+            setTagRename({
+                widgetIndex: row.widgetIndex,
+                tagName: row.tagName,
+                input: row.tagName,
+                error: null
+            });
+            return;
+        }
+        if (key.delete || input === 'd') {
+            const refCount = countTagReferences(row.widget, row.tagName);
+            setTagDelete({ widgetIndex: row.widgetIndex, tagName: row.tagName, refCount });
+            return;
+        }
+        if (input === 'a') {
+            createAndEditNewTag(row.widgetIndex);
+        }
+    };
+
+    const createAndEditNewTag = (widgetIndex: number) => {
+        const target = widgets[widgetIndex];
+        if (!target)
+            return;
+        const tagName = makeAutoTagName(target.tags);
+        const newWidgets = [...widgets];
+        newWidgets[widgetIndex] = addTag(target, tagName);
+        onUpdate(newWidgets);
+        setColorMenuContext({ widgetId: target.id, tagKey: tagName });
+    };
+
+    useInput((input, key) => {
+        // Skip input if custom editor or nested editor is active.
+        if (customEditorWidget)
+            return;
+        if (showClearConfirm)
+            return;
+        if (colorMenuContext)
+            return; // ColorMenu owns input
+        if (whenEditor)
+            return; // WidgetWhenEditor owns input
+        if (tagDelete)
+            return; // ConfirmDialog owns input
+
+        if (tagRename) {
+            handleTagRenameInput(input, key);
             return;
         }
 
@@ -180,29 +471,19 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
             handleMoveInputMode({
                 key,
                 widgets,
-                selectedIndex,
+                selectedIndex: activeWidgetIndex,
                 onUpdate,
-                setSelectedIndex,
+                setSelectedIndex: (nextWidgetIndex: number) => {
+                    const nextRows = buildWidgetRows(widgets);
+                    const targetRow = findWidgetRowIndex(nextRows, nextWidgetIndex);
+                    setSelectedIndex(targetRow >= 0 ? targetRow : 0);
+                },
                 setMoveMode
             });
             return;
         }
 
-        handleNormalInputMode({
-            input,
-            key,
-            widgets,
-            selectedIndex,
-            separatorChars,
-            onBack,
-            onUpdate,
-            setSelectedIndex,
-            setMoveMode,
-            setShowClearConfirm,
-            openWidgetPicker,
-            getCustomKeybindsForWidget,
-            setCustomEditorWidget
-        });
+        handleRowInput(input, key);
     });
 
     const getWidgetDisplay = (widget: WidgetItem) => {
@@ -251,9 +532,12 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
         : null;
 
     // Build dynamic help text based on selected item
-    const currentWidget = widgets[selectedIndex];
+    const currentWidget = widgets[activeWidgetIndex];
     const isSeparator = currentWidget?.type === 'separator';
     const isFlexSeparator = currentWidget?.type === 'flex-separator';
+    const isTagRow = selectedRow?.kind === 'tag';
+    const isAddTagRow = selectedRow?.kind === 'addTag';
+    const isWidgetRow = selectedRow?.kind === 'widget';
 
     // Check if widget supports raw value using registry
     let canToggleRaw = false;
@@ -269,7 +553,7 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
         }
     }
 
-    const canMerge = currentWidget && selectedIndex < widgets.length - 1 && !isSeparator && !isFlexSeparator;
+    const canMerge = currentWidget && activeWidgetIndex < widgets.length - 1 && !isSeparator && !isFlexSeparator;
     const hasWidgets = widgets.length > 0;
 
     // Build main help text (without custom keybinds)
@@ -279,8 +563,12 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
     if (isSeparator) {
         helpText += ', Space edit separator';
     }
-    if (hasWidgets) {
-        helpText += ', Enter to move, (a)dd via picker, (i)nsert via picker, (d)elete, (c)lear line';
+    if (isTagRow) {
+        helpText = '↑↓ select, Enter/e edit color, (a)dd tag, (r)ename, (d)elete';
+    } else if (isAddTagRow) {
+        helpText = '↑↓ select, Enter/a create new tag';
+    } else if (hasWidgets && isWidgetRow) {
+        helpText += ', Enter to move, (a)dd, (i)nsert, (d)elete, (c)lear line, co(n)ditional actions';
     }
     if (canToggleRaw) {
         helpText += ', (r)aw value';
@@ -306,6 +594,113 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
             onCancel: handleEditorCancel,
             action: customEditorWidget.action
         });
+    }
+
+    if (colorMenuContext) {
+        const targetWidget = widgets.find(w => w.id === colorMenuContext.widgetId);
+        if (!targetWidget) {
+            setColorMenuContext(null);
+        } else {
+            const title = colorMenuContext.tagKey
+                ? `Configure Tag Color — ${colorMenuContext.tagKey}`
+                : undefined;
+            return (
+                <ColorMenu
+                    widgets={[targetWidget]}
+                    settings={settings}
+                    tagKey={colorMenuContext.tagKey}
+                    title={title}
+                    onUpdate={(updated) => {
+                        const patched = updated[0];
+                        if (!patched)
+                            return;
+                        const newWidgets = widgets.map(w => w.id === patched.id ? patched : w);
+                        onUpdate(newWidgets);
+                    }}
+                    onBack={() => { setColorMenuContext(null); }}
+                />
+            );
+        }
+    }
+
+    if (whenEditor) {
+        const target = widgets[whenEditor.widgetIndex];
+        if (!target) {
+            setWhenEditor(null);
+        } else {
+            const widgetLabel = `Widget ${whenEditor.widgetIndex + 1}`;
+            const whenBreadcrumbPrefix = groupNumber !== undefined
+                ? `Edit Line ${lineNumber} › Group ${groupNumber} › ${widgetLabel}`
+                : `Edit Line ${lineNumber} › ${widgetLabel}`;
+            return (
+                <WidgetWhenEditor
+                    widget={target}
+                    breadcrumbPrefix={whenBreadcrumbPrefix}
+                    onUpdate={(updated) => {
+                        const newWidgets = [...widgets];
+                        newWidgets[whenEditor.widgetIndex] = updated;
+                        onUpdate(newWidgets);
+                    }}
+                    onBack={() => { setWhenEditor(null); }}
+                />
+            );
+        }
+    }
+
+    if (tagDelete) {
+        return (
+            <Box flexDirection='column'>
+                <Text bold color='yellow'>
+                    Remove tag '
+                    {tagDelete.tagName}
+                    '?
+                </Text>
+                <Box marginTop={1}>
+                    <Text>
+                        {tagDelete.refCount === 0
+                            ? 'No rules reference this tag.'
+                            : `${tagDelete.refCount} rule(s) reference this tag and will be removed.`}
+                    </Text>
+                </Box>
+                <Box marginTop={1}>
+                    <ConfirmDialog
+                        inline={true}
+                        onConfirm={() => {
+                            const target = widgets[tagDelete.widgetIndex];
+                            if (target) {
+                                const newWidgets = [...widgets];
+                                newWidgets[tagDelete.widgetIndex] = deleteTag(target, tagDelete.tagName);
+                                onUpdate(newWidgets);
+                            }
+                            setTagDelete(null);
+                        }}
+                        onCancel={() => { setTagDelete(null); }}
+                    />
+                </Box>
+            </Box>
+        );
+    }
+
+    if (tagRename) {
+        return (
+            <Box flexDirection='column'>
+                <Text bold>
+                    Rename tag '
+                    {tagRename.tagName}
+                    '
+                </Text>
+                <Box marginTop={1}>
+                    <Text>New name: </Text>
+                    <Text color='cyan'>{tagRename.input || '(empty)'}</Text>
+                </Box>
+                {tagRename.error && (
+                    <Box marginTop={1}>
+                        <Text color='red'>{tagRename.error}</Text>
+                    </Box>
+                )}
+                <Box marginTop={1}><Text dimColor>Enter to save, ESC to cancel</Text></Box>
+            </Box>
+        );
     }
 
     if (showClearConfirm) {
@@ -341,14 +736,21 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
         );
     }
 
+    // Breadcrumb: "Edit Line N › [Group M ›] Widget K" (spec requires 3-depth
+    // when groupsEnabled). Use "Widget -" when the list is empty so the depth
+    // marker is still visible at this navigation level.
+    const widgetDepthLabel = widgets.length > 0
+        ? `Widget ${selectedIndex + 1}`
+        : 'Widget -';
+    const breadcrumb = groupNumber !== undefined
+        ? `Edit Line ${lineNumber} › Group ${groupNumber} › ${widgetDepthLabel} `
+        : `Edit Line ${lineNumber} › ${widgetDepthLabel} `;
+
     return (
         <Box flexDirection='column'>
             <Box>
                 <Text bold>
-                    Edit Line
-                    {' '}
-                    {lineNumber}
-                    {' '}
+                    {breadcrumb}
                 </Text>
                 {moveMode && <Text color='blue'>[MOVE MODE]</Text>}
                 {widgetPicker && <Text color='cyan'>{`[${pickerActionLabel.toUpperCase()}]`}</Text>}
@@ -358,7 +760,7 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
                             ⚠
                             {' '}
                             {settings.powerline.enabled
-                                ? 'Powerline mode active: separators controlled by powerline settings'
+                                ? 'Powerline mode active: manual separators disabled'
                                 : 'Default separator active: manual separators disabled'}
                         </Text>
                     </Box>
@@ -517,35 +919,64 @@ export const ItemsEditor: React.FC<ItemsEditorProps> = ({ widgets, onUpdate, onB
             )}
             {!widgetPicker && (
                 <Box marginTop={1} flexDirection='column'>
-                    {widgets.length === 0 ? (
+                    {rows.length === 0 ? (
                         <Text dimColor>No widgets. Press 'a' to add one.</Text>
                     ) : (
                         <>
-                            {widgets.map((widget, index) => {
-                                const isSelected = index === selectedIndex;
-                                const widgetImpl = widget.type !== 'separator' && widget.type !== 'flex-separator' ? getWidget(widget.type) : null;
-                                const { displayText, modifierText } = widgetImpl?.getEditorDisplay(widget) ?? { displayText: getWidgetDisplay(widget) };
-                                const supportsRawValue = widgetImpl?.supportsRawValue() ?? false;
-
-                                return (
-                                    <Box key={widget.id} flexDirection='row' flexWrap='nowrap'>
-                                        <Box width={3}>
+                            {rows.map((row, rowIndex) => {
+                                const isSelected = rowIndex === selectedIndex;
+                                if (row.kind === 'widget') {
+                                    const widget = row.widget;
+                                    const widgetImpl = widget.type !== 'separator' && widget.type !== 'flex-separator' ? getWidget(widget.type) : null;
+                                    const { displayText, modifierText } = widgetImpl?.getEditorDisplay(widget) ?? { displayText: getWidgetDisplay(widget) };
+                                    const supportsRawValue = widgetImpl?.supportsRawValue() ?? false;
+                                    return (
+                                        <Box key={widget.id} flexDirection='row' flexWrap='nowrap'>
+                                            <Box width={3}>
+                                                <Text color={isSelected ? (moveMode ? 'blue' : 'green') : undefined}>
+                                                    {isSelected ? (moveMode ? '◆ ' : '▶ ') : '  '}
+                                                </Text>
+                                            </Box>
                                             <Text color={isSelected ? (moveMode ? 'blue' : 'green') : undefined}>
-                                                {isSelected ? (moveMode ? '◆ ' : '▶ ') : '  '}
+                                                {`${row.widgetIndex + 1}. ${displayText || getWidgetDisplay(widget)}`}
+                                            </Text>
+                                            {modifierText && (
+                                                <Text dimColor>
+                                                    {' '}
+                                                    {modifierText}
+                                                </Text>
+                                            )}
+                                            {supportsRawValue && widget.rawValue && <Text dimColor> (raw value)</Text>}
+                                            {widget.merge === true && <Text dimColor> (merged→)</Text>}
+                                            {widget.merge === 'no-padding' && <Text dimColor> (merged-no-pad→)</Text>}
+                                        </Box>
+                                    );
+                                }
+                                if (row.kind === 'tag') {
+                                    return (
+                                        <Box key={`${row.widget.id}-tag-${row.tagName}`} flexDirection='row' flexWrap='nowrap'>
+                                            <Box width={3}>
+                                                <Text color={isSelected ? 'green' : undefined}>
+                                                    {isSelected ? '▶ ' : '  '}
+                                                </Text>
+                                            </Box>
+                                            <Text dimColor={!isSelected} color={isSelected ? 'green' : undefined}>
+                                                {`    · ${row.tagName}`}
                                             </Text>
                                         </Box>
-                                        <Text color={isSelected ? (moveMode ? 'blue' : 'green') : undefined}>
-                                            {`${index + 1}. ${displayText || getWidgetDisplay(widget)}`}
-                                        </Text>
-                                        {modifierText && (
-                                            <Text dimColor>
-                                                {' '}
-                                                {modifierText}
+                                    );
+                                }
+                                // addTag
+                                return (
+                                    <Box key={`${row.widget.id}-addtag`} flexDirection='row' flexWrap='nowrap'>
+                                        <Box width={3}>
+                                            <Text color={isSelected ? 'green' : undefined}>
+                                                {isSelected ? '▶ ' : '  '}
                                             </Text>
-                                        )}
-                                        {supportsRawValue && widget.rawValue && <Text dimColor> (raw value)</Text>}
-                                        {widget.merge === true && <Text dimColor> (merged→)</Text>}
-                                        {widget.merge === 'no-padding' && <Text dimColor> (merged-no-pad→)</Text>}
+                                        </Box>
+                                        <Text dimColor={!isSelected} color={isSelected ? 'green' : undefined}>
+                                            {'    + Add tag…'}
+                                        </Text>
                                     </Box>
                                 );
                             })}

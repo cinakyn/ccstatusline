@@ -10,9 +10,12 @@ import {
 } from '../types/Settings';
 
 import {
+    detectVersion,
     migrateConfig,
-    needsMigration
+    needsMigration,
+    rewriteLegacyHideFlags
 } from './migrations';
+import { validateWhenRulesInSettings } from './when-catalog';
 
 // Use fs.promises directly (always available in modern Node.js)
 const readFile = fs.promises.readFile;
@@ -39,6 +42,8 @@ interface SettingsPaths {
     configDir: string;
     settingsPath: string;
     settingsBackupPath: string;
+    v3BackupPath: string;
+    v4BackupPath: string;
 }
 
 function getSettingsPaths(): SettingsPaths {
@@ -47,11 +52,16 @@ function getSettingsPaths(): SettingsPaths {
     const backupBaseName = parsedPath.ext
         ? `${parsedPath.name}.bak`
         : `${parsedPath.base}.bak`;
+    const v4BackupBaseName = parsedPath.ext
+        ? `${parsedPath.name}.v4.bak`
+        : `${parsedPath.base}.v4.bak`;
 
     return {
         configDir,
         settingsPath,
-        settingsBackupPath: path.join(configDir, backupBaseName)
+        settingsBackupPath: path.join(configDir, backupBaseName),
+        v3BackupPath: path.join(configDir, `${parsedPath.base}.v3.bak`),
+        v4BackupPath: path.join(configDir, v4BackupBaseName)
     };
 }
 
@@ -69,6 +79,51 @@ async function backupBadSettings(paths: SettingsPaths): Promise<void> {
         }
     } catch (error) {
         console.error('Failed to backup bad settings:', error);
+    }
+}
+
+/**
+ * Before the v3→v4 (tags + setTag) migration rewrites `alternateColors` and
+ * legacy `{color,bg,bold}` when-rules in place, copy the untouched settings
+ * file to `<name>.v4.bak` so users can recover the original shape if the
+ * migration's choices aren't what they wanted. Only runs once per config —
+ * skipped if the file is already v4+ or the backup already exists.
+ */
+async function writePreV4BackupIfNeeded(
+    rawData: unknown,
+    originalContent: string,
+    paths: SettingsPaths
+): Promise<void> {
+    const currentVersion = typeof rawData === 'object' && rawData !== null
+        && 'version' in rawData && typeof (rawData as { version?: unknown }).version === 'number'
+        ? (rawData as { version: number }).version
+        : 0;
+    if (currentVersion >= 4)
+        return;
+    if (fs.existsSync(paths.v4BackupPath))
+        return;
+    try {
+        await mkdir(paths.configDir, { recursive: true });
+        await writeFile(paths.v4BackupPath, originalContent, 'utf-8');
+        console.error(`Pre-v4 settings backed up to ${paths.v4BackupPath}`);
+    } catch (error) {
+        console.error('Failed to write pre-v4 settings backup:', error);
+    }
+}
+
+async function backupV3Settings(paths: SettingsPaths): Promise<void> {
+    try {
+        if (fs.existsSync(paths.v3BackupPath))
+            return;
+
+        if (!fs.existsSync(paths.settingsPath))
+            return;
+
+        const content = await readFile(paths.settingsPath, 'utf-8');
+        await writeFile(paths.v3BackupPath, content, 'utf-8');
+        console.error(`v3 settings backed up to ${paths.v3BackupPath}`);
+    } catch (error) {
+        console.error('Failed to backup v3 settings:', error);
     }
 }
 
@@ -115,6 +170,9 @@ export async function loadSettings(): Promise<Settings> {
 
         // Check if this is a v1 config (no version field)
         const hasVersion = typeof rawData === 'object' && rawData !== null && 'version' in rawData;
+        // Detect pre-migration version so we know whether to snapshot the v3
+        // file before overwriting it with v4 content.
+        const preMigrationVersion = detectVersion(rawData);
         if (!hasVersion) {
             // Parse as v1 to validate before migration
             const v1Result = SettingsSchema_v1.safeParse(rawData);
@@ -124,10 +182,17 @@ export async function loadSettings(): Promise<Settings> {
             }
 
             // Migrate v1 to current version and save the migrated settings back to disk
+            await writePreV4BackupIfNeeded(rawData, content, paths);
             rawData = migrateConfig(rawData, CURRENT_VERSION);
             await writeSettingsJson(rawData, paths);
         } else if (needsMigration(rawData, CURRENT_VERSION)) {
+            // If we're migrating away from a v3 on-disk file, snapshot it first
+            // so the user has a restore point before we rewrite it as v4.
+            if (preMigrationVersion === 3)
+                await backupV3Settings(paths);
+
             // Handle migrations for versioned configs (v2+) and save the migrated settings back to disk
+            await writePreV4BackupIfNeeded(rawData, content, paths);
             rawData = migrateConfig(rawData, CURRENT_VERSION);
             await writeSettingsJson(rawData, paths);
         }
@@ -140,7 +205,31 @@ export async function loadSettings(): Promise<Settings> {
             return await recoverWithDefaults(paths);
         }
 
-        return result.data;
+        // Rewrite legacy metadata hide flags (hideNoGit, hideNoRemote, etc.) into
+        // equivalent top-level `when` rules. Load-time only — does not touch disk.
+        const settings: Settings = {
+            ...result.data,
+            lines: result.data.lines.map(line => ({
+                groups: line.groups.map(group => ({
+                    ...group,
+                    widgets: group.widgets.map(rewriteLegacyHideFlags)
+                }))
+            }))
+        };
+
+        // Load-time validation: every `when` rule must reference a known
+        // predicate that applies to its widget, and every `setTag` rule must
+        // point at an existing tag on the same item. Surface these as a
+        // fatal error rather than silently dropping them at render time.
+        const whenErrors = validateWhenRulesInSettings(settings.lines);
+        if (whenErrors.length > 0) {
+            console.error(
+                `Settings validation failed for 'when' rules:\n  - ${whenErrors.join('\n  - ')}`
+            );
+            return await recoverWithDefaults(paths);
+        }
+
+        return settings;
     } catch (error) {
         // Any other error, backup and write defaults
         console.error('Error loading settings:', error);

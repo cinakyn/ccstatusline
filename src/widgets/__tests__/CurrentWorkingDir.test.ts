@@ -9,7 +9,10 @@ import {
 } from 'vitest';
 
 import type { RenderContext } from '../../types/RenderContext';
-import type { Settings } from '../../types/Settings';
+import {
+    DEFAULT_SETTINGS,
+    type Settings
+} from '../../types/Settings';
 import type { WidgetItem } from '../../types/Widget';
 import { CurrentWorkingDirWidget } from '../CurrentWorkingDir';
 
@@ -33,7 +36,7 @@ describe('CurrentWorkingDirWidget', () => {
     });
 
     const defaultSettings: Settings = {
-        version: 3,
+        version: 4,
         lines: [],
         flexMode: 'full',
         compactThreshold: 60,
@@ -42,14 +45,15 @@ describe('CurrentWorkingDirWidget', () => {
         inheritSeparatorColors: false,
         globalBold: false,
         minimalistMode: false,
+        groupsEnabled: false,
+        defaultGroupGap: '  ',
         powerline: {
+            ...DEFAULT_SETTINGS.powerline,
             enabled: false,
             separators: [],
             separatorInvertBackground: [],
             startCaps: [],
-            endCaps: [],
-            autoAlign: false,
-            continueThemeAcrossLines: false
+            endCaps: []
         }
     };
 

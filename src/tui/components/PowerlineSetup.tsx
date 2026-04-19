@@ -8,6 +8,8 @@ import React, { useState } from 'react';
 
 import type { PowerlineConfig } from '../../types/PowerlineConfig';
 import type { Settings } from '../../types/Settings';
+import { lineWidgets } from '../../utils/groups';
+import { shouldInsertInput } from '../../utils/input-guards';
 import { type PowerlineFontStatus } from '../../utils/powerline';
 import { buildEnabledPowerlineSettings } from '../../utils/powerline-settings';
 
@@ -120,14 +122,14 @@ export function buildPowerlineSetupMenuItems(
             sublabel: `(${getCapDisplay(powerlineConfig, 'start')})`,
             value: 'startCap',
             disabled,
-            description: 'Configure the cap glyph that appears at the start of each powerline line.'
+            description: 'Configure the cap glyph that appears at the start of each powerline line (also used at the left of each group when no separate group cap is set).'
         },
         {
             label: formatPowerlineMenuLabel('End Cap'),
             sublabel: `(${getCapDisplay(powerlineConfig, 'end')})`,
             value: 'endCap',
             disabled,
-            description: 'Configure the cap glyph that appears at the end of each powerline line.'
+            description: 'Configure the cap glyph that appears at the end of each powerline line (also used at the right of each group when no separate group cap is set).'
         },
         {
             label: formatPowerlineMenuLabel('Themes'),
@@ -165,8 +167,10 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
     const [selectedMenuItem, setSelectedMenuItem] = useState(0);
     const [confirmingEnable, setConfirmingEnable] = useState(false);
     const [confirmingFontInstall, setConfirmingFontInstall] = useState(false);
+    const [editingGroupGap, setEditingGroupGap] = useState(false);
+    const [groupGapInput, setGroupGapInput] = useState(settings.defaultGroupGap);
 
-    const hasSeparatorItems = settings.lines.some(line => line.some(
+    const hasSeparatorItems = settings.lines.some(line => lineWidgets(line).some(
         item => item.type === 'separator' || item.type === 'flex-separator'
     ));
 
@@ -179,6 +183,24 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
         }
 
         if (confirmingFontInstall || confirmingEnable) {
+            return;
+        }
+
+        if (editingGroupGap) {
+            if (key.return) {
+                onUpdate({
+                    ...settings,
+                    defaultGroupGap: groupGapInput
+                });
+                setEditingGroupGap(false);
+            } else if (key.escape) {
+                setGroupGapInput(settings.defaultGroupGap);
+                setEditingGroupGap(false);
+            } else if (key.backspace) {
+                setGroupGapInput(groupGapInput.slice(0, -1));
+            } else if (shouldInsertInput(input, key)) {
+                setGroupGapInput(groupGapInput + input);
+            }
             return;
         }
 
@@ -219,6 +241,11 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
                         continueThemeAcrossLines: !powerlineConfig.continueThemeAcrossLines
                     }
                 });
+            } else if ((input === 'g' || input === 'G') && powerlineConfig.enabled) {
+                onUpdate({ ...settings, groupsEnabled: !settings.groupsEnabled });
+            } else if ((input === 'p' || input === 'P') && powerlineConfig.enabled && settings.groupsEnabled) {
+                setGroupGapInput(settings.defaultGroupGap);
+                setEditingGroupGap(true);
             }
         }
     });
@@ -376,6 +403,14 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
                         <Text dimColor>Press any key to continue...</Text>
                     </Box>
                 </Box>
+            ) : editingGroupGap ? (
+                <Box flexDirection='column'>
+                    <Box>
+                        <Text>Enter default group gap (placed between groups): </Text>
+                        <Text color='cyan'>{groupGapInput ? `"${groupGapInput}"` : '(empty)'}</Text>
+                    </Box>
+                    <Text dimColor>Press Enter to save, ESC to cancel</Text>
+                </Box>
             ) : (
                 <>
                     <Box flexDirection='column'>
@@ -421,12 +456,33 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
                                 <Text dimColor> - Press (c) to toggle</Text>
                             </Box>
 
+                            <Box>
+                                <Text> Groups Enabled: </Text>
+                                <Text color={settings.groupsEnabled ? 'green' : 'red'}>
+                                    {settings.groupsEnabled ? '✓ Enabled  ' : '✗ Disabled '}
+                                </Text>
+                                <Text dimColor> - Press (g) to toggle</Text>
+                            </Box>
+
+                            {settings.groupsEnabled && (
+                                <Box>
+                                    <Text>      Group Gap: </Text>
+                                    <Text color='cyan'>
+                                        {settings.defaultGroupGap ? `"${settings.defaultGroupGap}"` : '(none)'}
+                                    </Text>
+                                    <Text dimColor> - Press (p) to edit</Text>
+                                </Box>
+                            )}
+
                             <Box flexDirection='column' marginTop={1}>
                                 <Text dimColor>
                                     When enabled, global overrides are disabled and powerline separators are used
                                 </Text>
                                 <Text dimColor>
                                     Continue Theme keeps the Powerline color sequence running across lines
+                                </Text>
+                                <Text dimColor>
+                                    Groups let you split widgets into visually separated clusters with per-group gap
                                 </Text>
                             </Box>
                         </>

@@ -2,6 +2,7 @@
 export * from './ColorMenu';
 export * from './ConfirmDialog';
 export * from './GlobalOverridesMenu';
+export * from './GroupEditor';
 export * from './InstallMenu';
 export * from './ItemsEditor';
 export * from './LineSelector';
@@ -11,3 +12,4 @@ export * from './RefreshIntervalMenu';
 export * from './StatusLinePreview';
 export * from './TerminalOptionsMenu';
 export * from './TerminalWidthMenu';
+export * from './WidgetWhenEditor';

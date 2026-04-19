@@ -6,17 +6,45 @@ import {
 } from 'ink';
 import React, { useState } from 'react';
 
+import type { Line } from '../../types/Group';
 import type { Settings } from '../../types/Settings';
+import type { WidgetItem } from '../../types/Widget';
 import {
     hasCustomWidgetColors,
     sanitizeLinesForColorLevel
 } from '../../utils/color-sanitize';
+import { lineWidgets } from '../../utils/groups';
 
 import { ConfirmDialog } from './ConfirmDialog';
 import {
     List,
     type ListEntry
 } from './List';
+
+/**
+ * Apply sanitized widget arrays back onto the line list.
+ *
+ * The color-sanitize helpers operate on flat `WidgetItem[][]`; this reattaches
+ * the results into the existing Line shape so group metadata
+ * (gap/continuousColor) is preserved. In Stage A every line has at most one
+ * group, so the mapping is unambiguous: the whole widget array replaces the
+ * lone group's widgets.
+ */
+function applySanitizedLines(existingLines: Line[], sanitized: WidgetItem[][]): Line[] {
+    return existingLines.map((line, index) => {
+        const widgets = sanitized[index] ?? [];
+        if (line.groups.length === 1) {
+            const [first] = line.groups;
+            if (first) {
+                return { ...line, groups: [{ ...first, widgets }] };
+            }
+        }
+        return {
+            ...line,
+            groups: [{ continuousColor: true, widgets }]
+        };
+    });
+}
 
 type TerminalOptionsValue = 'width' | 'colorLevel';
 
@@ -83,7 +111,8 @@ export const TerminalOptionsMenu: React.FC<TerminalOptionsMenuProps> = ({
             return;
         }
 
-        const hasCustomColors = hasCustomWidgetColors(settings.lines);
+        const flatLines = settings.lines.map(lineWidgets);
+        const hasCustomColors = hasCustomWidgetColors(flatLines);
         const currentLevel = settings.colorLevel;
         const nextLevel = getNextColorLevel(currentLevel);
 
@@ -95,11 +124,11 @@ export const TerminalOptionsMenu: React.FC<TerminalOptionsMenuProps> = ({
 
         chalk.level = nextLevel;
 
-        const cleanedLines = sanitizeLinesForColorLevel(settings.lines, nextLevel);
+        const cleanedLines = sanitizeLinesForColorLevel(flatLines, nextLevel);
 
         onUpdate({
             ...settings,
-            lines: cleanedLines,
+            lines: applySanitizedLines(settings.lines, cleanedLines),
             colorLevel: nextLevel
         });
     };
@@ -108,11 +137,11 @@ export const TerminalOptionsMenu: React.FC<TerminalOptionsMenuProps> = ({
         if (pendingColorLevel !== null) {
             chalk.level = pendingColorLevel;
 
-            const cleanedLines = sanitizeLinesForColorLevel(settings.lines, pendingColorLevel);
+            const cleanedLines = sanitizeLinesForColorLevel(settings.lines.map(lineWidgets), pendingColorLevel);
 
             onUpdate({
                 ...settings,
-                lines: cleanedLines,
+                lines: applySanitizedLines(settings.lines, cleanedLines),
                 colorLevel: pendingColorLevel
             });
         }

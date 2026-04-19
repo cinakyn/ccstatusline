@@ -61,7 +61,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             label: '⚡ Powerline Setup',
             value: 'powerline',
             description:
-                'Install Powerline fonts for enhanced visual separators and symbols in your status line'
+                'Enable powerline mode, install fonts, configure separators, caps, group layout and themes'
         },
         '-' as const,
         {

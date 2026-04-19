@@ -5,9 +5,15 @@ import {
 } from 'ink';
 import React from 'react';
 
+import type { Line } from '../../types/Group';
 import type { RenderContext } from '../../types/RenderContext';
 import type { Settings } from '../../types/Settings';
 import type { WidgetItem } from '../../types/Widget';
+import {
+    calculateGroupedMaxWidths,
+    type GroupedMaxWidths
+} from '../../utils/grouped-max-widths';
+import { lineWidgets } from '../../utils/groups';
 import { advanceGlobalPowerlineThemeIndex } from '../../utils/powerline-theme-index';
 import {
     calculateMaxWidthsFromPreRendered,
@@ -19,7 +25,7 @@ import {
 import { advanceGlobalSeparatorIndex } from '../../utils/separator-index';
 
 export interface StatusLinePreviewProps {
-    lines: WidgetItem[][];
+    lines: Line[];
     terminalWidth: number;
     settings?: Settings;
     onTruncationChange?: (isTruncated: boolean) => void;
@@ -33,7 +39,9 @@ const renderSingleLine = (
     globalSeparatorIndex: number,
     globalPowerlineThemeIndex: number,
     preRenderedWidgets: PreRenderedWidget[],
-    preCalculatedMaxWidths: number[]
+    preCalculatedMaxWidths: number[],
+    lineEntry: Line,
+    groupedMaxWidths?: GroupedMaxWidths
 ): RenderResult => {
     // Create render context for preview
     const context: RenderContext = {
@@ -45,7 +53,7 @@ const renderSingleLine = (
         globalPowerlineThemeIndex
     };
 
-    return renderStatusLineWithInfo(widgets, settings, context, preRenderedWidgets, preCalculatedMaxWidths);
+    return renderStatusLineWithInfo(widgets, settings, context, preRenderedWidgets, preCalculatedMaxWidths, lineEntry, groupedMaxWidths);
 };
 
 export const StatusLinePreview: React.FC<StatusLinePreviewProps> = ({ lines, terminalWidth, settings, onTruncationChange }) => {
@@ -59,31 +67,42 @@ export const StatusLinePreview: React.FC<StatusLinePreviewProps> = ({ lines, ter
         const preRenderedLines = preRenderAllWidgets(lines, settings, { terminalWidth, isPreview: true, minimalist: settings.minimalistMode });
         const preCalculatedMaxWidths = calculateMaxWidthsFromPreRendered(preRenderedLines, settings);
 
+        const powerlineCfg = settings.powerline as Record<string, unknown> | undefined;
+        const groupedMaxWidths = (settings.groupsEnabled && Boolean(powerlineCfg?.autoAlign))
+            ? calculateGroupedMaxWidths(lines, preRenderedLines, settings)
+            : undefined;
+
         let globalSeparatorIndex = 0;
         let globalPowerlineThemeIndex = 0;
         const result: string[] = [];
         let truncated = false;
 
         for (let i = 0; i < lines.length; i++) {
-            const lineItems = lines[i];
-            if (lineItems && lineItems.length > 0) {
+            const lineEntry = lines[i];
+            if (!lineEntry) {
+                continue;
+            }
+            const widgetsForLine = lineWidgets(lineEntry);
+            if (widgetsForLine.length > 0) {
                 const preRenderedWidgets = preRenderedLines[i] ?? [];
                 const renderResult = renderSingleLine(
-                    lineItems,
+                    widgetsForLine,
                     terminalWidth,
                     settings,
                     i,
                     globalSeparatorIndex,
                     globalPowerlineThemeIndex,
                     preRenderedWidgets,
-                    preCalculatedMaxWidths
+                    preCalculatedMaxWidths,
+                    lineEntry,
+                    groupedMaxWidths
                 );
                 result.push(renderResult.line);
                 if (renderResult.wasTruncated) {
                     truncated = true;
                 }
 
-                globalSeparatorIndex = advanceGlobalSeparatorIndex(globalSeparatorIndex, lineItems);
+                globalSeparatorIndex = advanceGlobalSeparatorIndex(globalSeparatorIndex, widgetsForLine);
                 if (settings.powerline.enabled && settings.powerline.continueThemeAcrossLines) {
                     globalPowerlineThemeIndex = advanceGlobalPowerlineThemeIndex(globalPowerlineThemeIndex, preRenderedWidgets);
                 }

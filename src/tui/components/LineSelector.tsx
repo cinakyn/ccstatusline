@@ -10,22 +10,27 @@ import React, {
     useState
 } from 'react';
 
+import type { Line } from '../../types/Group';
 import type { Settings } from '../../types/Settings';
-import type { WidgetItem } from '../../types/Widget';
+import { lineWidgets } from '../../utils/groups';
 
 import { ConfirmDialog } from './ConfirmDialog';
 import { List } from './List';
 
 interface LineSelectorProps {
-    lines: WidgetItem[][];
+    lines: Line[];
     onSelect: (line: number) => void;
     onBack: () => void;
-    onLinesUpdate: (lines: WidgetItem[][]) => void;
+    onLinesUpdate: (lines: Line[]) => void;
     initialSelection?: number;
     title?: string;
     blockIfPowerlineActive?: boolean;
     settings?: Settings;
     allowEditing?: boolean;
+}
+
+function emptyLine(): Line {
+    return { groups: [] };
 }
 
 const LineSelector: React.FC<LineSelectorProps> = ({
@@ -56,9 +61,10 @@ const LineSelector: React.FC<LineSelectorProps> = ({
         () => localLines[selectedIndex],
         [localLines, selectedIndex]
     );
+    const selectedLineWidgetCount = selectedLine ? lineWidgets(selectedLine).length : 0;
 
     const appendLine = () => {
-        const newLines = [...localLines, []];
+        const newLines = [...localLines, emptyLine()];
         setLocalLines(newLines);
         onLinesUpdate(newLines);
         setSelectedIndex(newLines.length - 1);
@@ -181,8 +187,8 @@ const LineSelector: React.FC<LineSelectorProps> = ({
 
     if (showDeleteDialog && selectedLine) {
         const suffix
-            = selectedLine.length > 0
-                ? pluralize('widget', selectedLine.length, true)
+            = selectedLineWidgetCount > 0
+                ? pluralize('widget', selectedLineWidgetCount, true)
                 : 'empty';
 
         return (
@@ -222,11 +228,14 @@ const LineSelector: React.FC<LineSelectorProps> = ({
         );
     }
 
-    const lineItems = localLines.map((line, index) => ({
-        label: `☰ Line ${index + 1}`,
-        sublabel: `(${line.length > 0 ? pluralize('widget', line.length, true) : 'empty'})`,
-        value: index
-    }));
+    const lineItems = localLines.map((line, index) => {
+        const count = lineWidgets(line).length;
+        return {
+            label: `☰ Line ${index + 1}`,
+            sublabel: `(${count > 0 ? pluralize('widget', count, true) : 'empty'})`,
+            value: index
+        };
+    });
 
     return (
         <>
@@ -257,8 +266,9 @@ const LineSelector: React.FC<LineSelectorProps> = ({
                     <Box marginTop={1} flexDirection='column'>
                         {localLines.map((line, index) => {
                             const isSelected = selectedIndex === index;
-                            const suffix = line.length
-                                ? pluralize('widget', line.length, true)
+                            const count = lineWidgets(line).length;
+                            const suffix = count
+                                ? pluralize('widget', count, true)
                                 : 'empty';
 
                             return (

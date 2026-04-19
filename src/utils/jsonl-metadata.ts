@@ -14,7 +14,9 @@ export interface ResolvedThinkingEffort {
 }
 
 const MODEL_STDOUT_PREFIX = '<local-command-stdout>Set model to ';
+const EFFORT_STDOUT_PREFIX = '<local-command-stdout>Set effort level to ';
 const MODEL_STDOUT_EFFORT_REGEX = /^<local-command-stdout>Set model to[\s\S]*? with ([a-zA-Z0-9-]+) effort<\/local-command-stdout>$/i;
+const EFFORT_STDOUT_REGEX = /^<local-command-stdout>Set effort level to ([a-zA-Z0-9-]+)\b/i;
 const UNKNOWN_EFFORT_PATTERN = /^(?=.*[a-z0-9])[a-z0-9-]{2,20}$/;
 
 interface TranscriptEntry { message?: { content?: string } }
@@ -56,12 +58,14 @@ export function getTranscriptThinkingEffort(transcriptPath: string | undefined):
             }
 
             const visibleContent = getVisibleText(entry.message.content).trim();
-            if (!visibleContent.startsWith(MODEL_STDOUT_PREFIX)) {
-                continue;
+            if (visibleContent.startsWith(EFFORT_STDOUT_PREFIX)) {
+                const match = EFFORT_STDOUT_REGEX.exec(visibleContent);
+                return normalizeThinkingEffort(match?.[1]);
             }
-
-            const match = MODEL_STDOUT_EFFORT_REGEX.exec(visibleContent);
-            return normalizeThinkingEffort(match?.[1]);
+            if (visibleContent.startsWith(MODEL_STDOUT_PREFIX)) {
+                const match = MODEL_STDOUT_EFFORT_REGEX.exec(visibleContent);
+                return normalizeThinkingEffort(match?.[1]);
+            }
         }
     } catch {
         return undefined;

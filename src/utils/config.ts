@@ -78,16 +78,18 @@ async function backupBadSettings(paths: SettingsPaths): Promise<void> {
 
 async function backupV3Settings(paths: SettingsPaths): Promise<void> {
     try {
-        if (fs.existsSync(paths.v3BackupPath))
-            return;
-
         if (!fs.existsSync(paths.settingsPath))
             return;
 
         const content = await readFile(paths.settingsPath, 'utf-8');
-        await writeFile(paths.v3BackupPath, content, 'utf-8');
+        // `flag:'wx'` closes the TOCTOU between existsSync and writeFile —
+        // concurrent v3→v4 load paths can't both race through the check and
+        // double-write the backup.
+        await writeFile(paths.v3BackupPath, content, { encoding: 'utf-8', flag: 'wx' });
         console.error(`v3 settings backed up to ${paths.v3BackupPath}`);
     } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST')
+            return;
         console.error('Failed to backup v3 settings:', error);
     }
 }
@@ -138,6 +140,24 @@ export async function loadSettings(): Promise<Settings> {
         // Detect pre-migration version so we know whether to snapshot the v3
         // file before overwriting it with v4 content.
         const preMigrationVersion = detectVersion(rawData);
+
+        // Refuse to parse (and refuse to overwrite) configs from newer binaries.
+        // Without this guard, zod would reject the unknown v4+ shape and
+        // `recoverWithDefaults` would move the user's config to `.bak` and
+        // silently replace it with the current binary's defaults — effectively
+        // destroying the newer binary's settings.
+        if (hasVersion && preMigrationVersion > CURRENT_VERSION) {
+            console.error(
+                `Settings file at ${paths.settingsPath} was written by a newer ccstatusline `
+                + `(config version ${preMigrationVersion}); this binary expects version `
+                + `${CURRENT_VERSION} or lower. Using in-memory defaults for this run and `
+                + `leaving the file untouched. If you did not mean to downgrade, upgrade the `
+                + `binary or copy ${paths.v3BackupPath} back over `
+                + `${paths.settingsPath}.`
+            );
+            return SettingsSchema.parse({});
+        }
+
         if (!hasVersion) {
             // Parse as v1 to validate before migration
             const v1Result = SettingsSchema_v1.safeParse(rawData);

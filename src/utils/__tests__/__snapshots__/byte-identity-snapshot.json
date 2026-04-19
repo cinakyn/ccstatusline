@@ -1,0 +1,803 @@
+[
+  {
+    "name": "plain-two-widgets",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "alpha",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "separator"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "beta",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {},
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;30malpha\u001b[39m | \u001b[38;5;96mbeta\u001b[39m"
+    ]
+  },
+  {
+    "name": "plain-multi-line-flex",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "left",
+          "color": "yellow"
+        },
+        {
+          "id": "2",
+          "type": "flex-separator"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "right",
+          "color": "green"
+        }
+      ],
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "lower",
+          "color": "brightBlack"
+        }
+      ]
+    ],
+    "settingsOverrides": {},
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;178mleft\u001b[39m                                                                       \u001b[38;5;70mright\u001b[39m",
+      "\u001b[38;5;59mlower\u001b[39m"
+    ]
+  },
+  {
+    "name": "plain-bold-and-override-fg",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "bold-me",
+          "color": "red",
+          "bold": true
+        },
+        {
+          "id": "2",
+          "type": "separator"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "plain",
+          "color": "white"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "overrideForegroundColor": "blue",
+      "globalBold": true
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[1m\u001b[38;5;26mbold-me\u001b[39m\u001b[22m\u001b[1m\u001b[38;5;26m | \u001b[39m\u001b[22m\u001b[1m\u001b[38;5;26mplain\u001b[39m\u001b[22m"
+    ]
+  },
+  {
+    "name": "plain-empty-line-skipped-still-rendered",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "only",
+          "color": "cyan"
+        }
+      ],
+      []
+    ],
+    "settingsOverrides": {},
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;30monly\u001b[39m",
+      ""
+    ]
+  },
+  {
+    "name": "plain-custom-separator-and-padding",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "one",
+          "color": "white"
+        },
+        {
+          "id": "2",
+          "type": "separator"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "two",
+          "color": "white"
+        },
+        {
+          "id": "4",
+          "type": "separator"
+        },
+        {
+          "id": "5",
+          "type": "custom-text",
+          "customText": "three",
+          "color": "white"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "defaultSeparator": " >> ",
+      "defaultPadding": "  "
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[0m  \u001b[0m\u001b[38;5;188mone\u001b[39m\u001b[0m  \u001b[0m >>  >>  >> \u001b[0m  \u001b[0m\u001b[38;5;188mtwo\u001b[39m\u001b[0m  \u001b[0m >>  >>  >> \u001b[0m  \u001b[0m\u001b[38;5;188mthree\u001b[39m\u001b[0m  \u001b[0m"
+    ]
+  },
+  {
+    "name": "plain-inherit-separator-colors",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "alpha",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "separator"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "beta",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "inheritSeparatorColors": true
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;30malpha\u001b[39m\u001b[38;5;30m | \u001b[39m\u001b[38;5;96mbeta\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-basic-two-widgets",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "alpha",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "beta",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;30malpha\u001b[49m\u001b[39m\u001b[38;5;96mbeta\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-three-widgets-default-theme",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "one",
+          "color": "white"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "two",
+          "color": "white"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "three",
+          "color": "white"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;188mone\u001b[49m\u001b[39m\u001b[38;5;188mtwo\u001b[49m\u001b[39m\u001b[38;5;188mthree\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-autoalign-two-lines",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "short",
+          "color": "white"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "model-long-name",
+          "color": "white"
+        }
+      ],
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "muchlonger",
+          "color": "white"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "abc",
+          "color": "white"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": true,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;188mshort     \u001b[49m\u001b[39m\u001b[38;5;188mmodel-long-name\u001b[49m\u001b[39m",
+      "\u001b[38;5;188mmuchlonger\u001b[49m\u001b[39m\u001b[38;5;188mabc            \u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-continue-theme-across-lines",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "a",
+          "color": "white"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "b",
+          "color": "white"
+        }
+      ],
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "c",
+          "color": "white"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "d",
+          "color": "white"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": true
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;188ma\u001b[49m\u001b[39m\u001b[38;5;188mb\u001b[49m\u001b[39m",
+      "\u001b[38;5;188mc\u001b[49m\u001b[39m\u001b[38;5;188md\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-start-end-caps",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "cap-test",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "two",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [
+          ""
+        ],
+        "endCaps": [
+          ""
+        ],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;30mcap-test\u001b[49m\u001b[39m\u001b[38;5;96mtwo\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-multiple-separators-cycle",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "a",
+          "color": "white"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "b",
+          "color": "white"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "c",
+          "color": "white"
+        },
+        {
+          "id": "4",
+          "type": "custom-text",
+          "customText": "d",
+          "color": "white"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          "",
+          ""
+        ],
+        "separatorInvertBackground": [
+          false,
+          true
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;188ma\u001b[49m\u001b[39m\u001b[38;5;188mb\u001b[49m\u001b[39m\u001b[38;5;188mc\u001b[49m\u001b[39m\u001b[38;5;188md\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-bold-global",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "alpha",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "beta",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "globalBold": true,
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[1m\u001b[38;5;30malpha\u001b[49m\u001b[39m\u001b[22m\u001b[1m\u001b[38;5;96mbeta\u001b[49m\u001b[39m\u001b[22m"
+    ]
+  },
+  {
+    "name": "powerline-override-fg",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "alpha",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "beta",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "overrideForegroundColor": "blue",
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;26malpha\u001b[49m\u001b[39m\u001b[38;5;26mbeta\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-override-bg",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "alpha",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "beta",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "overrideBackgroundColor": "black",
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;30malpha\u001b[49m\u001b[39m\u001b[38;5;96mbeta\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-flex-between",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "left",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "flex-separator"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "right",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;30mleft\u001b[49m\u001b[39m\u001b[38;5;96mright\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-preserve-colors-custom-command",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-command",
+          "command": "printf \"\\x1b[31mred\\x1b[0m\"",
+          "color": "cyan",
+          "preserveColors": true
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      ""
+    ]
+  },
+  {
+    "name": "powerline-minimalist-mode",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "alpha",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "beta",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "minimalistMode": true,
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;30malpha\u001b[49m\u001b[39m\u001b[38;5;96mbeta\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-color-level-1",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "alpha",
+          "color": "cyan"
+        },
+        {
+          "id": "2",
+          "type": "custom-text",
+          "customText": "beta",
+          "color": "magenta"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "colorLevel": 1,
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": false,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[36malpha\u001b[49m\u001b[39m\u001b[35mbeta\u001b[49m\u001b[39m"
+    ]
+  },
+  {
+    "name": "powerline-autoalign-with-flex",
+    "lines": [
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "a",
+          "color": "white"
+        },
+        {
+          "id": "2",
+          "type": "flex-separator"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "right-a",
+          "color": "white"
+        }
+      ],
+      [
+        {
+          "id": "1",
+          "type": "custom-text",
+          "customText": "bb",
+          "color": "white"
+        },
+        {
+          "id": "2",
+          "type": "flex-separator"
+        },
+        {
+          "id": "3",
+          "type": "custom-text",
+          "customText": "right-bb",
+          "color": "white"
+        }
+      ]
+    ],
+    "settingsOverrides": {
+      "powerline": {
+        "enabled": true,
+        "separators": [
+          ""
+        ],
+        "separatorInvertBackground": [
+          false
+        ],
+        "startCaps": [],
+        "endCaps": [],
+        "autoAlign": true,
+        "continueThemeAcrossLines": false
+      }
+    },
+    "terminalWidth": 120,
+    "outputs": [
+      "\u001b[38;5;188ma \u001b[49m\u001b[39m\u001b[38;5;188mright-a \u001b[49m\u001b[39m",
+      "\u001b[38;5;188mbb\u001b[49m\u001b[39m\u001b[38;5;188mright-bb\u001b[49m\u001b[39m"
+    ]
+  }
+]

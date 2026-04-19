@@ -288,11 +288,10 @@ export function rewriteLegacyHideFlags(item: WidgetItem): WidgetItem {
     const remainingMeta: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(metadata)) {
+        remainingMeta[key] = value;
         const predicate = LEGACY_HIDE_FLAG_MAP[key];
         if (predicate && value === 'true') {
             legacyRules.push({ on: predicate, do: 'hide' });
-        } else {
-            remainingMeta[key] = value;
         }
     }
 

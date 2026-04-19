@@ -118,6 +118,33 @@ describe('config utilities', () => {
         );
     });
 
+    it('does not overwrite a newer-version config when an older binary runs on it', async () => {
+        const { settingsPath, backupPath, configDir } = getSettingsPaths();
+        fs.mkdirSync(configDir, { recursive: true });
+        // Simulate a future-version config. Shape doesn't need to be valid —
+        // the guard kicks in before schema parsing.
+        const futureVersion = CURRENT_VERSION + 7;
+        const futureConfig = { version: futureVersion, somethingFromFuture: true };
+        const originalContent = JSON.stringify(futureConfig, null, 2);
+        fs.writeFileSync(settingsPath, originalContent, 'utf-8');
+
+        const settings = await loadSettings();
+
+        // Falls back to in-memory defaults for this run.
+        expect(settings.version).toBe(CURRENT_VERSION);
+        // The on-disk file is untouched — no backup, no overwrite.
+        expect(fs.readFileSync(settingsPath, 'utf-8')).toBe(originalContent);
+        expect(fs.existsSync(backupPath)).toBe(false);
+        // The error message names the newer version and points at the backup
+        // files so the user can restore.
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect.stringContaining(`config version ${futureVersion}`)
+        );
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('.v3.bak')
+        );
+    });
+
     it('backs up invalid v1 payloads and recovers with defaults', async () => {
         const { settingsPath, backupPath, configDir } = getSettingsPaths();
         fs.mkdirSync(configDir, { recursive: true });
@@ -200,7 +227,10 @@ describe('config utilities', () => {
         const widget = settings.lines[0]?.groups[0]?.widgets[0];
 
         expect(widget?.when).toEqual([{ on: 'no-git', do: 'hide' }]);
-        expect(widget?.metadata).toEqual({ linkToGitHub: 'true' });
+        // Metadata is preserved alongside the synthesized when rule so the
+        // widget-level `!branch` fallback (detached HEAD, empty repo) keeps
+        // hiding — the `no-git` predicate only covers `!isInsideGitWorkTree`.
+        expect(widget?.metadata).toEqual({ hideNoGit: 'true', linkToGitHub: 'true' });
 
         interface OnDiskWidget { metadata?: Record<string, string>; when?: unknown }
         interface OnDiskLine { groups: { widgets: OnDiskWidget[] }[] }

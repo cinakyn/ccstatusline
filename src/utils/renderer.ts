@@ -326,10 +326,13 @@ function renderPowerlineStatusLine(
             widgetContent += '\x1b[0m';
         } else {
             widgetContent += '\x1b[49m\x1b[39m';
-            // Only reset bold if there's no separator following AND no end cap
-            const isLastWidget = i === widgetElements.length - 1;
-            const hasEndCap = endCaps.length > 0 && endCaps[capLineIndex % endCaps.length];
-            if (shouldBold && !needsSeparator && !(isLastWidget && hasEndCap)) {
+            // Always reset bold so it doesn't leak into the following
+            // separator or end cap. On ANSI16 terminals, \x1b[1m renders
+            // the fg color as its bright variant, so a separator/cap glyph
+            // drawn while bold is still active would render in a different
+            // shade than the adjacent pill bg (a visible seam at sector
+            // boundaries).
+            if (shouldBold) {
                 widgetContent += '\x1b[22m';
             }
         }

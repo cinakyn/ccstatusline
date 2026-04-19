@@ -20,6 +20,7 @@ import {
     getPowerlineTheme
 } from './colors';
 import { calculateContextPercentage } from './context-percentage';
+import type { GroupedMaxWidths } from './grouped-max-widths';
 import { lineWidgets } from './groups';
 import { getTerminalWidth } from './terminal';
 import {
@@ -399,7 +400,8 @@ function renderGroupedPowerlineStatusLine(
     widgets: WidgetItem[],
     settings: Settings,
     context: RenderContext,
-    preRenderedWidgets: PreRenderedWidget[]
+    preRenderedWidgets: PreRenderedWidget[],
+    groupedMaxWidths?: GroupedMaxWidths
 ): string {
     const lineIndex = context.lineIndex ?? 0;
     const globalSeparatorOffset = context.globalSeparatorIndex ?? 0;
@@ -536,6 +538,158 @@ function renderGroupedPowerlineStatusLine(
             isHidden: false,
             sourceGroupIndex: gi
         });
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 1.5: Apply left-anchor widget-level alignment padding.
+    // Uses the precomputed GroupedMaxWidths; no-op if not provided.
+    // -----------------------------------------------------------------------
+    if (groupedMaxWidths) {
+        const leftCount = groupedMaxWidths.leftAnchorGroupCount[lineIndex] ?? 0;
+        for (const gd of groupData) {
+            if (gd.isHidden)
+                continue;
+            if (gd.sourceGroupIndex >= leftCount)
+                continue;
+            const slotMaxes = groupedMaxWidths.widgetMaxWidths[gd.sourceGroupIndex] ?? [];
+            let wPos = 0;
+            for (let i = 0; i < gd.elements.length; i++) {
+                const el = gd.elements[i];
+                if (!el)
+                    continue;
+                // Determine the end of this merge chain
+                let j = i;
+                while (j < gd.elements.length - 1 && gd.elements[j]?.widget.merge)
+                    j++;
+                // Current chain width
+                let chainWidth = 0;
+                for (let k = i; k <= j; k++) {
+                    const cel = gd.elements[k];
+                    if (cel)
+                        chainWidth += getVisibleWidth(cel.content);
+                }
+                const target = slotMaxes[wPos];
+                if (target !== undefined && target > chainWidth) {
+                    const last = gd.elements[j];
+                    if (last)
+                        last.content = last.content + ' '.repeat(target - chainWidth);
+                }
+                i = j;
+                wPos++;
+            }
+        }
+
+        // Group-total padding: after widget-level, pad the group's last element
+        // so the group's rendered visual width (element content + intra-group
+        // widgetSeparators) matches the target.
+        //
+        // The target is max(groupTotalMax[g], sum(widgetMaxWidths[g]) + dominant_seps)
+        // where dominant_seps = (widgetMaxWidths[g].length - 1) * widgetSeparatorWidth.
+        // This covers two scenarios:
+        //   1. Single-widget groups on the other line are wider (groupTotalMax wins).
+        //   2. Multi-widget groups after widget-level need visual alignment (slot-sum wins).
+        for (const gd of groupData) {
+            if (gd.isHidden)
+                continue;
+            if (gd.sourceGroupIndex >= leftCount)
+                continue;
+            const slotMaxes = groupedMaxWidths.widgetMaxWidths[gd.sourceGroupIndex] ?? [];
+            const slotMaxSum = slotMaxes.reduce((s: number, n: number) => s + n, 0);
+            const dominantSeps = Math.max(0, slotMaxes.length - 1);
+            const sepWidth = getVisibleWidth(widgetSeparator[0] ?? '');
+            const targetFromSlots = slotMaxSum + dominantSeps * sepWidth;
+            const targetFromGroupTotal = groupedMaxWidths.groupTotalMax[gd.sourceGroupIndex] ?? 0;
+            const targetTotal = Math.max(targetFromSlots, targetFromGroupTotal);
+            if (targetTotal === 0)
+                continue;
+            // currentTotal: visual width = element content widths + intra-group separators
+            let currentTotal = 0;
+            for (const el of gd.elements)
+                currentTotal += getVisibleWidth(el.content);
+            let currentSepCount = 0;
+            for (let i = 0; i < gd.elements.length - 1; i++) {
+                const el = gd.elements[i];
+                if (el && !el.widget.merge)
+                    currentSepCount++;
+            }
+            currentTotal += currentSepCount * sepWidth;
+            if (targetTotal > currentTotal) {
+                const last = gd.elements[gd.elements.length - 1];
+                if (last)
+                    last.content = last.content + ' '.repeat(targetTotal - currentTotal);
+            }
+        }
+
+        // Right-anchor widget-level padding: prepend to the FIRST element of
+        // each merge chain, walking right-to-left so rWPos=0 is rightmost.
+        const rightCount = groupedMaxWidths.rightAnchorGroupCount[lineIndex] ?? 0;
+        const rightZoneStart = line.groups.length - rightCount;
+        for (const gd of groupData) {
+            if (gd.isHidden)
+                continue;
+            if (gd.sourceGroupIndex < rightZoneStart)
+                continue;
+            const rG = line.groups.length - 1 - gd.sourceGroupIndex;
+            const slotMaxes = groupedMaxWidths.rightWidgetMaxWidths[rG] ?? [];
+            let rWPos = 0;
+            let j = gd.elements.length - 1;
+            while (j >= 0) {
+                // Find chain start: walk backward while prev element has merge.
+                let i = j;
+                while (i > 0 && gd.elements[i - 1]?.widget.merge)
+                    i--;
+                let chainWidth = 0;
+                for (let k = i; k <= j; k++) {
+                    const cel = gd.elements[k];
+                    if (cel)
+                        chainWidth += getVisibleWidth(cel.content);
+                }
+                const target = slotMaxes[rWPos];
+                if (target !== undefined && target > chainWidth) {
+                    const first = gd.elements[i];
+                    if (first)
+                        first.content = ' '.repeat(target - chainWidth) + first.content;
+                }
+                rWPos++;
+                j = i - 1;
+            }
+        }
+
+        // Right-anchor group-total padding: prepend to FIRST element of the
+        // group until visual width (content + intra-group separators) matches
+        // the greater of (sum of rightWidgetMaxWidths + separators) and
+        // rightGroupTotalMax.
+        for (const gd of groupData) {
+            if (gd.isHidden)
+                continue;
+            if (gd.sourceGroupIndex < rightZoneStart)
+                continue;
+            const rG = line.groups.length - 1 - gd.sourceGroupIndex;
+            const slotMaxes = groupedMaxWidths.rightWidgetMaxWidths[rG] ?? [];
+            const slotMaxSum = slotMaxes.reduce((s: number, n: number) => s + n, 0);
+            const dominantSeps = Math.max(0, slotMaxes.length - 1);
+            const sepWidth = getVisibleWidth(widgetSeparator[0] ?? '');
+            const targetFromSlots = slotMaxSum + dominantSeps * sepWidth;
+            const targetFromGroupTotal = groupedMaxWidths.rightGroupTotalMax[rG] ?? 0;
+            const targetTotal = Math.max(targetFromSlots, targetFromGroupTotal);
+            if (targetTotal === 0)
+                continue;
+            let currentTotal = 0;
+            for (const el of gd.elements)
+                currentTotal += getVisibleWidth(el.content);
+            let currentSepCount = 0;
+            for (let i = 0; i < gd.elements.length - 1; i++) {
+                const el = gd.elements[i];
+                if (el && !el.widget.merge)
+                    currentSepCount++;
+            }
+            currentTotal += currentSepCount * sepWidth;
+            if (targetTotal > currentTotal) {
+                const first = gd.elements[0];
+                if (first)
+                    first.content = ' '.repeat(targetTotal - currentTotal) + first.content;
+            }
+        }
     }
 
     // B4: visible groups only — hidden groups are excluded from flex budget,
@@ -804,7 +958,8 @@ function renderPowerlineStatusLine(
     context: RenderContext,
     preRenderedWidgets: PreRenderedWidget[],  // Pre-rendered widgets for this line
     preCalculatedMaxWidths: number[],  // Pre-calculated max widths for alignment
-    line?: Line  // Optional line for group-aware rendering
+    line?: Line,  // Optional line for group-aware rendering
+    groupedMaxWidths?: GroupedMaxWidths
 ): string {
     const lineIndex = context.lineIndex ?? 0;
     const globalSeparatorOffset = context.globalSeparatorIndex ?? 0;
@@ -817,7 +972,8 @@ function renderPowerlineStatusLine(
             widgets,
             settings,
             context,
-            preRenderedWidgets
+            preRenderedWidgets,
+            groupedMaxWidths
         );
     }
 
@@ -1153,9 +1309,10 @@ export function renderStatusLineWithInfo(
     context: RenderContext,
     preRenderedWidgets: PreRenderedWidget[],
     preCalculatedMaxWidths: number[],
-    line?: Line
+    line?: Line,
+    groupedMaxWidths?: GroupedMaxWidths
 ): RenderResult {
-    const renderedLine = renderStatusLine(widgets, settings, context, preRenderedWidgets, preCalculatedMaxWidths, line);
+    const renderedLine = renderStatusLine(widgets, settings, context, preRenderedWidgets, preCalculatedMaxWidths, line, groupedMaxWidths);
     // Check if line contains the truncation ellipsis
     const wasTruncated = renderedLine.includes('...');
     return { line: renderedLine, wasTruncated };
@@ -1167,7 +1324,8 @@ export function renderStatusLine(
     context: RenderContext,
     preRenderedWidgets: PreRenderedWidget[],
     preCalculatedMaxWidths: number[],
-    line?: Line
+    line?: Line,
+    groupedMaxWidths?: GroupedMaxWidths
 ): string {
     // Check powerline mode before dispatching to group renderers so the right
     // multi-group path is used.
@@ -1192,7 +1350,8 @@ export function renderStatusLine(
             context,
             preRenderedWidgets,
             preCalculatedMaxWidths,
-            line
+            line,
+            groupedMaxWidths
         );
     }
 
@@ -1211,7 +1370,8 @@ export function renderStatusLine(
             context,
             preRenderedWidgets,
             preCalculatedMaxWidths,
-            line
+            line,
+            groupedMaxWidths
         );
 
     // Helper to apply colors with optional background and bold override

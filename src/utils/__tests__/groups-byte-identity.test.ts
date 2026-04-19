@@ -60,6 +60,47 @@ function flatSettings(overrides: Partial<Settings> = {}): Settings {
     };
 }
 
+// Small helper to render every line of a settings object through the same
+// pipeline (preRender + calculate widths + renderStatusLine) using a fixed
+// RenderContext. Returns a per-line string array so callers can assert
+// character-by-character equivalence.
+function renderAllLines(settings: Settings, terminalWidth: number): string[] {
+    const context: RenderContext = {
+        isPreview: false,
+        terminalWidth,
+        minimalist: false
+    };
+
+    const preRenderedLines = preRenderAllWidgets(settings.lines, settings, context);
+    const preCalculatedMaxWidths = calculateMaxWidthsFromPreRendered(preRenderedLines, settings);
+
+    return settings.lines.map((line, idx) => {
+        const widgets = lineWidgets(line);
+        const preRenderedWidgets = preRenderedLines[idx] ?? [];
+        const lineContext: RenderContext = { ...context, lineIndex: idx };
+        return renderStatusLine(widgets, settings, lineContext, preRenderedWidgets, preCalculatedMaxWidths, line);
+    });
+}
+
+// Build a v4-native Settings object with the provided flat widget arrays
+// wrapped into single-group lines. Accepts optional powerline overrides.
+function buildV4NativeSettings(
+    flatLines: WidgetItem[][],
+    overrides: Partial<Settings> = {}
+): Settings {
+    const lines: Line[] = flatLines.map(widgets => ({ groups: [{ continuousColor: true, widgets }] }));
+
+    return {
+        ...DEFAULT_SETTINGS,
+        ...overrides,
+        lines,
+        powerline: {
+            ...DEFAULT_SETTINGS.powerline,
+            ...(overrides.powerline ?? {})
+        }
+    };
+}
+
 describe('groups byte-identity: powerline-off flatten invariant', () => {
     const TERMINAL_WIDTH = 120;
 
@@ -164,5 +205,21 @@ describe('groups byte-identity: powerline-off flatten invariant', () => {
         const settings = flatSettings();
         expect(renderLine(multiGroup, settings, TERMINAL_WIDTH))
             .toBe(renderLine(singleGroup, settings, TERMINAL_WIDTH));
+    });
+});
+
+describe('groups byte-identity with autoAlign toggled', () => {
+    it('a v4-native fixture renders without error under autoAlign:true', () => {
+        const settings = buildV4NativeSettings(
+            [[
+                { id: '1', type: 'custom-text', customText: 'A', color: 'white' },
+                { id: '2', type: 'custom-text', customText: 'BB', color: 'white' }
+            ]],
+            {
+                groupsEnabled: true,
+                powerline: { ...DEFAULT_SETTINGS.powerline, enabled: true, autoAlign: true }
+            }
+        );
+        expect(() => renderAllLines(settings, 120)).not.toThrow();
     });
 });

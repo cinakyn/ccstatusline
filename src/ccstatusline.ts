@@ -17,6 +17,7 @@ import {
     loadSettings,
     saveSettings
 } from './utils/config';
+import { calculateGroupedMaxWidths } from './utils/grouped-max-widths';
 import { lineWidgets } from './utils/groups';
 import {
     getSessionDuration,
@@ -159,6 +160,11 @@ async function renderMultipleLines(data: StatusJSON) {
     const preRenderedLines = preRenderAllWidgets(lines, settings, context);
     const preCalculatedMaxWidths = calculateMaxWidthsFromPreRendered(preRenderedLines, settings);
 
+    const powerlineCfg = settings.powerline as Record<string, unknown> | undefined;
+    const groupedMaxWidths = (settings.groupsEnabled && Boolean(powerlineCfg?.autoAlign))
+        ? calculateGroupedMaxWidths(lines, preRenderedLines, settings)
+        : undefined;
+
     // Render each line using pre-rendered content
     let globalSeparatorIndex = 0;
     let globalPowerlineThemeIndex = 0;
@@ -176,7 +182,7 @@ async function renderMultipleLines(data: StatusJSON) {
                 globalSeparatorIndex,
                 globalPowerlineThemeIndex
             };
-            const renderedLine = renderStatusLine(widgetsForLine, settings, lineContext, preRenderedWidgets, preCalculatedMaxWidths, lineEntry);
+            const renderedLine = renderStatusLine(widgetsForLine, settings, lineContext, preRenderedWidgets, preCalculatedMaxWidths, lineEntry, groupedMaxWidths);
 
             // Only output the line if it has content (not just ANSI codes)
             // Strip ANSI codes to check if there's actual text

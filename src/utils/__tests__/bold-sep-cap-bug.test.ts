@@ -4,6 +4,7 @@ import {
     it
 } from 'vitest';
 
+import type { Line } from '../../types/Group';
 import type { RenderContext } from '../../types/RenderContext';
 import {
     DEFAULT_SETTINGS,
@@ -33,9 +34,14 @@ function createPowerlineSettings(
     };
 }
 
+function wrapAsLines(widgetLines: WidgetItem[][]): Line[] {
+    return widgetLines.map(widgets => ({ groups: [{ continuousColor: true, widgets }] }));
+}
+
 function renderLine(widgets: WidgetItem[], settings: Settings): string {
     const context: RenderContext = { isPreview: false };
-    const preRenderedLines = preRenderAllWidgets([widgets], settings, context);
+    const lines = wrapAsLines([widgets]);
+    const preRenderedLines = preRenderAllWidgets(lines, settings, context);
     const preCalculatedMaxWidths = calculateMaxWidthsFromPreRendered(preRenderedLines, settings);
     const preRenderedWidgets = preRenderedLines[0] ?? [];
 

@@ -200,33 +200,72 @@ export const migrations: Migration[] = [
             });
 
             // B2: populate new powerline symbol vocabulary from old fields
-            if (isRecord(data.powerline)) {
-                const pl = data.powerline;
-                const oldSeparators = Array.isArray(pl.separators)
-                    ? pl.separators.filter((s): s is string => typeof s === 'string')
-                    : ['\uE0B0'];
-                const oldStartCaps = Array.isArray(pl.startCaps)
-                    ? pl.startCaps.filter((s): s is string => typeof s === 'string')
-                    : [];
-                const oldEndCaps = Array.isArray(pl.endCaps)
-                    ? pl.endCaps.filter((s): s is string => typeof s === 'string')
-                    : [];
-                migrated.powerline = {
-                    ...pl,
-                    widgetSeparator: [...oldSeparators],
-                    groupStartCap: [...oldStartCaps],
-                    groupEndCap: [...oldEndCaps],
-                    lineStartCap: [...oldStartCaps],
-                    lineEndCap: [...oldEndCaps],
-                    groupGap: '  '
-                };
-            }
+            if (isRecord(data.powerline))
+                migrated.powerline = ensurePowerlineVocabulary(data.powerline);
 
             migrated.version = 4;
             return migrated;
         }
     }
 ];
+
+/**
+ * Idempotent repair step for the B2 powerline vocabulary.  Copies legacy
+ * `startCaps` / `endCaps` / `separators` into the new `groupStartCap` /
+ * `groupEndCap` / `widgetSeparator` / `lineStartCap` / `lineEndCap` fields
+ * when the new ones are missing or empty.  Defaults `groupGap` to two spaces.
+ *
+ * Mirrors the populate rules the original v3→v4 migration used, so that
+ * hand-edited or previously mis-migrated v4 files (which set `version: 4`
+ * without ever running the populate step) end up with the same fully-formed
+ * vocabulary that a fresh v3→v4 migration would have produced.
+ *
+ * Called from the v3→v4 migration AND from the config loader for every
+ * already-v4 config, without a version bump.
+ */
+export function ensurePowerlineVocabulary(pl: Record<string, unknown>): Record<string, unknown> {
+    const legacySeparators = Array.isArray(pl.separators)
+        ? pl.separators.filter((s): s is string => typeof s === 'string')
+        : ['\uE0B0'];
+    const legacyStartCaps = Array.isArray(pl.startCaps)
+        ? pl.startCaps.filter((s): s is string => typeof s === 'string')
+        : [];
+    const legacyEndCaps = Array.isArray(pl.endCaps)
+        ? pl.endCaps.filter((s): s is string => typeof s === 'string')
+        : [];
+
+    const repaired: Record<string, unknown> = { ...pl };
+
+    const needsWidgetSeparator = !Array.isArray(pl.widgetSeparator)
+        || (pl.widgetSeparator as unknown[]).length === 0;
+    if (needsWidgetSeparator)
+        repaired.widgetSeparator = [...legacySeparators];
+
+    const needsGroupStartCap = !Array.isArray(pl.groupStartCap)
+        || (pl.groupStartCap as unknown[]).length === 0;
+    if (needsGroupStartCap)
+        repaired.groupStartCap = [...legacyStartCaps];
+
+    const needsGroupEndCap = !Array.isArray(pl.groupEndCap)
+        || (pl.groupEndCap as unknown[]).length === 0;
+    if (needsGroupEndCap)
+        repaired.groupEndCap = [...legacyEndCaps];
+
+    const needsLineStartCap = !Array.isArray(pl.lineStartCap)
+        || (pl.lineStartCap as unknown[]).length === 0;
+    if (needsLineStartCap)
+        repaired.lineStartCap = [...legacyStartCaps];
+
+    const needsLineEndCap = !Array.isArray(pl.lineEndCap)
+        || (pl.lineEndCap as unknown[]).length === 0;
+    if (needsLineEndCap)
+        repaired.lineEndCap = [...legacyEndCaps];
+
+    if (typeof pl.groupGap !== 'string')
+        repaired.groupGap = '  ';
+
+    return repaired;
+}
 
 /**
  * Detect the version of the config data

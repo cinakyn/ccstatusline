@@ -11,6 +11,7 @@ import {
 
 import {
     detectVersion,
+    ensurePowerlineVocabulary,
     migrateConfig,
     needsMigration,
     rewriteLegacyHideFlags
@@ -219,6 +220,21 @@ export async function loadSettings(): Promise<Settings> {
             await writePreV4BackupIfNeeded(rawData, content, paths);
             rawData = migrateConfig(rawData, CURRENT_VERSION);
             await writeSettingsJson(rawData, paths);
+        } else {
+            // Already-current-version configs: re-apply the B2 powerline
+            // vocabulary populate step in case the on-disk file was written by
+            // an older build that set version=4 without filling in the new
+            // fields, or was hand-edited.  Idempotent — only persists when
+            // something actually changed.
+            const rec = rawData as Record<string, unknown>;
+            const pl = rec.powerline;
+            if (typeof pl === 'object' && pl !== null && !Array.isArray(pl)) {
+                const repairedPowerline = ensurePowerlineVocabulary(pl as Record<string, unknown>);
+                if (JSON.stringify(repairedPowerline) !== JSON.stringify(pl)) {
+                    rawData = { ...rec, powerline: repairedPowerline };
+                    await writeSettingsJson(rawData, paths);
+                }
+            }
         }
 
         // At this point, data should be in current format with version field

@@ -220,8 +220,8 @@ function buildPowerlineElements(
 // `separators` / `invertBgs` come from v3 config (flat path) or widgetSeparator
 // (group path).  `separatorOffset` is the global running index so the caller
 // can pick the right separator character.
-// `groupEndCap` / `hasGroupEndCap` control whether bold-reset is deferred to
-// after the end-cap (same as the existing end-cap logic).
+// Bold is always reset before a separator or cap glyph so ANSI16 bright-bold
+// cannot leak into those glyphs (visible seam bug).
 // ---------------------------------------------------------------------------
 
 function renderPowerlineElements(
@@ -230,8 +230,7 @@ function renderPowerlineElements(
     invertBgs: boolean[],
     separatorOffset: number,
     colorLevel: 'ansi16' | 'ansi256' | 'truecolor',
-    settings: Settings,
-    hasTrailingCap: boolean
+    settings: Settings
 ): string {
     let result = '';
 
@@ -264,8 +263,12 @@ function renderPowerlineElements(
             widgetContent += '\x1b[0m';
         } else {
             widgetContent += '\x1b[49m\x1b[39m';
-            const isLastWidget = i === elements.length - 1;
-            if (shouldBold && !needsSeparator && !(isLastWidget && hasTrailingCap))
+            // Always reset bold before a following separator or cap glyph. On
+            // ANSI16 terminals, `\x1b[1m` renders the fg color as its bright
+            // variant, so drawing a separator/cap while bold is still active
+            // makes that glyph render in a different shade than the adjacent
+            // pill bg (a visible seam at sector boundaries).
+            if (shouldBold)
                 widgetContent += '\x1b[22m';
         }
 
@@ -319,8 +322,6 @@ function renderPowerlineElements(
             }
 
             result += separatorOutput;
-            if (shouldBold)
-                result += '\x1b[22m';
         }
     }
 
@@ -411,11 +412,21 @@ function renderGroupedPowerlineStatusLine(
     const config = powerlineConfig ?? {};
     const continueThemeAcrossLines = Boolean(config.continueThemeAcrossLines);
 
-    // New vocabulary (B2 fields)
+    // New vocabulary (B2 fields).  Fall back to the legacy v3 `startCaps` /
+    // `endCaps` fields for the group-cap role when the new vocabulary is
+    // empty — this covers configs that were migrated to v4 before the B2
+    // populate step existed, or that have been hand-edited since.  Line-cap
+    // fallback is deliberately NOT applied to avoid rendering the same cap
+    // twice (once at line boundary, once at group boundary) for configs that
+    // only ever had v3 `startCaps`.
     const widgetSeparator = (config.widgetSeparator as string[] | undefined) ?? ['\uE0B0'];
     const invertBgs = (config.separatorInvertBackground as boolean[] | undefined) ?? widgetSeparator.map(() => false);
-    const groupStartCaps = (config.groupStartCap as string[] | undefined) ?? [];
-    const groupEndCaps = (config.groupEndCap as string[] | undefined) ?? [];
+    const legacyStartCaps = (config.startCaps as string[] | undefined) ?? [];
+    const legacyEndCaps = (config.endCaps as string[] | undefined) ?? [];
+    const rawGroupStartCaps = (config.groupStartCap as string[] | undefined) ?? [];
+    const rawGroupEndCaps = (config.groupEndCap as string[] | undefined) ?? [];
+    const groupStartCaps = rawGroupStartCaps.length > 0 ? rawGroupStartCaps : legacyStartCaps;
+    const groupEndCaps = rawGroupEndCaps.length > 0 ? rawGroupEndCaps : legacyEndCaps;
     const groupGapStr = (config.groupGap as string | undefined) ?? '  ';
     const lineStartCaps = (config.lineStartCap as string[] | undefined) ?? [];
     const lineEndCaps = (config.lineEndCap as string[] | undefined) ?? [];
@@ -840,8 +851,7 @@ function renderGroupedPowerlineStatusLine(
                 invertBgs,
                 globalSeparatorOffset,
                 colorLevel,
-                settings,
-                Boolean(groupEndCap)
+                settings
             );
         } else {
             // Flex path: insert spaces at flex positions
@@ -860,9 +870,6 @@ function renderGroupedPowerlineStatusLine(
                 if (!part)
                     continue;
 
-                const isLastPart = pi === parts.length - 1;
-                const hasCapAfterPart = Boolean(groupEndCap) && isLastPart;
-
                 if (part.length > 0) {
                     // Determine separator offset for this part
                     const partSepOffset = globalSeparatorOffset + elementIdx;
@@ -872,8 +879,7 @@ function renderGroupedPowerlineStatusLine(
                         invertBgs,
                         partSepOffset,
                         colorLevel,
-                        settings,
-                        hasCapAfterPart || !isLastPart  // more content follows if not last
+                        settings
                     );
                     elementIdx += part.length;
                 }
@@ -1090,8 +1096,7 @@ function renderPowerlineStatusLine(
         invertBgs,
         globalSeparatorOffset,
         colorLevel,
-        settings,
-        Boolean(endCap)
+        settings
     );
 
     // End cap (adjacent to last widget's bgColor) + its trailing bold-reset

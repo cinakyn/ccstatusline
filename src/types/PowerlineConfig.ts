@@ -14,9 +14,7 @@ export const PowerlineConfigSchema = z.object({
     widgetSeparator: z.array(z.string()).default(['\uE0B0']),
     groupStartCap: z.array(z.string()).default([]),
     groupEndCap: z.array(z.string()).default([]),
-    groupGap: z.string().default('  '),
-    lineStartCap: z.array(z.string()).default([]),
-    lineEndCap: z.array(z.string()).default([])
+    groupGap: z.string().default('  ')
 });
 
 // Inferred type from schema

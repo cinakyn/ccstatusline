@@ -24,12 +24,11 @@ import {
 // powerline fields:
 //
 //   flat     → separators / startCaps / endCaps
-//   grouped  → widgetSeparator / groupStartCap / groupEndCap
-//              + lineStartCap / lineEndCap + groupGap
+//   grouped  → widgetSeparator / groupStartCap / groupEndCap + groupGap
 //
 // These tests pin that independence so that a mis-configured one-sided
-// config (common when upgrading from v3) can no longer leak a single glyph
-// into both `lineStartCap` and `groupStartCap` at the same line position.
+// config (common when upgrading from v3) cannot leak legacy cap glyphs into
+// the grouped path.
 // ---------------------------------------------------------------------------
 
 const TERMINAL_WIDTH = 200;
@@ -61,8 +60,6 @@ function buildSettings(opts: {
     widgetSeparator?: string[];
     groupStartCap?: string[];
     groupEndCap?: string[];
-    lineStartCap?: string[];
-    lineEndCap?: string[];
     groupGap?: string;
 }): Settings {
     return {
@@ -78,8 +75,6 @@ function buildSettings(opts: {
             widgetSeparator: opts.widgetSeparator ?? DEFAULT_SETTINGS.powerline.widgetSeparator,
             groupStartCap: opts.groupStartCap ?? [],
             groupEndCap: opts.groupEndCap ?? [],
-            lineStartCap: opts.lineStartCap ?? [],
-            lineEndCap: opts.lineEndCap ?? [],
             groupGap: opts.groupGap ?? '  '
         }
     };
@@ -147,15 +142,13 @@ describe('powerline mode split: grouped path ignores legacy cap fields', () => {
     });
 });
 
-describe('powerline mode split: lineStartCap does not duplicate groupStartCap', () => {
-    it('with only groupStartCap set, rendered line has exactly one cap at group boundary (no duplication)', () => {
+describe('powerline mode split: groupStartCap renders once per group', () => {
+    it('with groupStartCap set, rendered line has exactly one cap at each group boundary', () => {
         const CAP = 'GROUPCAP_XYZ';
         const settings = buildSettings({
             groupsEnabled: true,
             lines: [twoGroupLine()],
             groupStartCap: [CAP]
-            // lineStartCap left empty — the historical bug wrote the same
-            // glyph to both fields, causing double rendering at line start.
         });
 
         const [rendered] = renderAllLines(settings);
@@ -164,23 +157,6 @@ describe('powerline mode split: lineStartCap does not duplicate groupStartCap', 
         // With 2 groups the cap appears at each group's start → 2 times.
         const occurrences = (rendered ?? '').split(CAP).length - 1;
         expect(occurrences).toBe(2);
-    });
-
-    it('with both groupStartCap AND lineStartCap set to the same glyph, the first group boundary sees 2 renders (explicit user choice, not a bug)', () => {
-        const CAP = 'CAPZ';
-        const settings = buildSettings({
-            groupsEnabled: true,
-            lines: [twoGroupLine()],
-            groupStartCap: [CAP],
-            lineStartCap: [CAP]
-        });
-
-        const [rendered] = renderAllLines(settings);
-        expect(rendered).toBeDefined();
-
-        // lineStartCap once + groupStartCap per group (2 groups) = 3 total.
-        const occurrences = (rendered ?? '').split(CAP).length - 1;
-        expect(occurrences).toBe(3);
     });
 });
 
@@ -240,15 +216,13 @@ describe('powerline mode split: groupGap is used between groups in grouped mode 
     });
 });
 
-describe('powerline mode split: lineEndCap is independent of groupEndCap', () => {
-    it('both lineEndCap and groupEndCap render at the end of a multi-group line', () => {
+describe('powerline mode split: groupStartCap / groupEndCap both render in multi-group mode', () => {
+    it('both groupStartCap and groupEndCap render on a multi-group line', () => {
         const settings = buildSettings({
             groupsEnabled: true,
             lines: [twoGroupLine()],
             groupStartCap: ['GSC_A'],
-            groupEndCap: ['GEC_B'],
-            lineStartCap: ['LSC_C'],
-            lineEndCap: ['LEC_D']
+            groupEndCap: ['GEC_B']
         });
 
         const [rendered] = renderAllLines(settings);
@@ -256,8 +230,6 @@ describe('powerline mode split: lineEndCap is independent of groupEndCap', () =>
         const out = rendered ?? '';
         expect(out).toContain('GSC_A');
         expect(out).toContain('GEC_B');
-        expect(out).toContain('LSC_C');
-        expect(out).toContain('LEC_D');
     });
 });
 

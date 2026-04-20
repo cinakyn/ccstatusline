@@ -74,8 +74,6 @@ function mkSettings(lines: Line[]): Settings {
             groupStartCap: [],
             groupEndCap: [],
             groupGap: '  ',
-            lineStartCap: [],
-            lineEndCap: [],
             separatorInvertBackground: [false]
         }
     };

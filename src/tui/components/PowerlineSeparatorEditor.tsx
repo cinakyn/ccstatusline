@@ -14,12 +14,10 @@ export type EditorMode
         | 'endCap'
         | 'widgetSeparator'
         | 'groupStartCap'
-        | 'groupEndCap'
-        | 'lineStartCap'
-        | 'lineEndCap';
+        | 'groupEndCap';
 
 const SEPARATOR_MODES = new Set<EditorMode>(['separator', 'widgetSeparator']);
-const START_CAP_MODES = new Set<EditorMode>(['startCap', 'groupStartCap', 'lineStartCap']);
+const START_CAP_MODES = new Set<EditorMode>(['startCap', 'groupStartCap']);
 
 function isSeparatorLike(mode: EditorMode): boolean {
     return SEPARATOR_MODES.has(mode);
@@ -59,10 +57,6 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                 return powerlineConfig.groupStartCap;
             case 'groupEndCap':
                 return powerlineConfig.groupEndCap;
-            case 'lineStartCap':
-                return powerlineConfig.lineStartCap;
-            case 'lineEndCap':
-                return powerlineConfig.lineEndCap;
         }
     };
 
@@ -143,12 +137,6 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                 break;
             case 'groupEndCap':
                 updatedPowerline.groupEndCap = newSeparators;
-                break;
-            case 'lineStartCap':
-                updatedPowerline.lineStartCap = newSeparators;
-                break;
-            case 'lineEndCap':
-                updatedPowerline.lineEndCap = newSeparators;
                 break;
         }
 
@@ -321,10 +309,6 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                 return 'Powerline Group Start Cap';
             case 'groupEndCap':
                 return 'Powerline Group End Cap';
-            case 'lineStartCap':
-                return 'Powerline Line Start Cap (grouped mode)';
-            case 'lineEndCap':
-                return 'Powerline Line End Cap (grouped mode)';
         }
     };
 

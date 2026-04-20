@@ -70,12 +70,11 @@ function buildV4NativeSettings(
 // ---------------------------------------------------------------------------
 // Under the mode-split design the legacy v3 fields (`separators` /
 // `startCaps` / `endCaps`) are the source of truth for the flat path, and
-// the new per-group / per-line fields are the source of truth for the
-// grouped path (groupsEnabled=true).  The v3→v4 migration therefore
-// intentionally leaves the new vocabulary fields at their schema defaults
-// rather than copying legacy caps into them — auto-copy used to cause
-// duplicate cap rendering at line boundaries (same glyph emitted as
-// `lineStartCap` AND `groupStartCap` of the first group).
+// the new per-group fields are the source of truth for the grouped path
+// (groupsEnabled=true).  The v3→v4 migration therefore intentionally leaves
+// the new vocabulary fields at their schema defaults rather than copying
+// legacy caps into them — auto-copy would cause duplicate cap rendering at
+// group boundaries.
 // ---------------------------------------------------------------------------
 
 describe('powerline vocabulary: v3→v4 migration leaves new fields at schema defaults', () => {
@@ -98,13 +97,10 @@ describe('powerline vocabulary: v3→v4 migration leaves new fields at schema de
         const pl = migrated.powerline as Record<string, unknown>;
 
         // Migration only ensures groupGap default; it must not populate
-        // widgetSeparator / groupStartCap / groupEndCap / lineStartCap /
-        // lineEndCap from legacy values.
+        // widgetSeparator / groupStartCap / groupEndCap from legacy values.
         expect(pl.widgetSeparator).toBeUndefined();
         expect(pl.groupStartCap).toBeUndefined();
         expect(pl.groupEndCap).toBeUndefined();
-        expect(pl.lineStartCap).toBeUndefined();
-        expect(pl.lineEndCap).toBeUndefined();
         expect(pl.groupGap).toBe('  ');
 
         // Legacy fields are preserved.
@@ -137,8 +133,6 @@ describe('powerline vocabulary: v3→v4 migration leaves new fields at schema de
         expect(pl.widgetSeparator).toBeUndefined();
         expect(pl.groupStartCap).toBeUndefined();
         expect(pl.groupEndCap).toBeUndefined();
-        expect(pl.lineStartCap).toBeUndefined();
-        expect(pl.lineEndCap).toBeUndefined();
     });
 });
 
@@ -252,8 +246,6 @@ describe('powerline vocabulary: schema defaults for new fields', () => {
             expect(parsed.data.powerline.widgetSeparator).toEqual(['\uE0B0']);
             expect(parsed.data.powerline.groupStartCap).toEqual([]);
             expect(parsed.data.powerline.groupEndCap).toEqual([]);
-            expect(parsed.data.powerline.lineStartCap).toEqual([]);
-            expect(parsed.data.powerline.lineEndCap).toEqual([]);
             expect(parsed.data.powerline.groupGap).toBe('  ');
         }
     });
@@ -286,8 +278,6 @@ describe('powerline vocabulary: schema defaults for new fields', () => {
             expect(parsed.data.powerline.widgetSeparator).toEqual(['\uE0B0']);
             expect(parsed.data.powerline.groupStartCap).toEqual([]);
             expect(parsed.data.powerline.groupEndCap).toEqual([]);
-            expect(parsed.data.powerline.lineStartCap).toEqual([]);
-            expect(parsed.data.powerline.lineEndCap).toEqual([]);
             expect(parsed.data.powerline.groupGap).toBe('  ');
         }
     });
@@ -315,8 +305,6 @@ describe('powerline vocabulary: idempotency on v4 config', () => {
                 widgetSeparator: ['CUSTOM'],
                 groupStartCap: ['GSC'],
                 groupEndCap: ['GEC'],
-                lineStartCap: ['LSC'],
-                lineEndCap: ['LEC'],
                 groupGap: '---'
             }
         };
@@ -329,8 +317,6 @@ describe('powerline vocabulary: idempotency on v4 config', () => {
         expect(pl.widgetSeparator).toEqual(['CUSTOM']);
         expect(pl.groupStartCap).toEqual(['GSC']);
         expect(pl.groupEndCap).toEqual(['GEC']);
-        expect(pl.lineStartCap).toEqual(['LSC']);
-        expect(pl.lineEndCap).toEqual(['LEC']);
         expect(pl.groupGap).toBe('---');
     });
 });

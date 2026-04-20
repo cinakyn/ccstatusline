@@ -28,9 +28,7 @@ type PowerlineMenuValue
         | 'themes'
         | 'widgetSeparator'
         | 'groupStartCap'
-        | 'groupEndCap'
-        | 'lineStartCap'
-        | 'lineEndCap';
+        | 'groupEndCap';
 type Screen = 'menu' | PowerlineMenuValue;
 const POWERLINE_MENU_LABEL_WIDTH = 18;
 
@@ -105,10 +103,9 @@ export function getCapDisplay(
 
 /**
  * Display helper for the group-mode fields (widgetSeparator / groupStartCap /
- * groupEndCap / lineStartCap / lineEndCap).  An empty array renders as "none"
- * because the grouped renderer treats an empty cap array as "do not emit this
- * cap at all", which is a meaningfully different state from "single default
- * glyph".
+ * groupEndCap).  An empty array renders as "none" because the grouped renderer
+ * treats an empty cap array as "do not emit this cap at all", which is a
+ * meaningfully different state from "single default glyph".
  */
 function getGroupFieldDisplay(
     caps: readonly string[],
@@ -213,20 +210,6 @@ export function buildPowerlineSetupMenuItems(
             value: 'groupEndCap',
             disabled: groupModeDisabled,
             description: 'Grouped mode: cap glyph at the end of each widget group.'
-        },
-        {
-            label: formatPowerlineMenuLabel('Line Start Cap'),
-            sublabel: `(${getGroupFieldDisplay(powerlineConfig.lineStartCap, 'startCap')})`,
-            value: 'lineStartCap',
-            disabled: groupModeDisabled,
-            description: 'Grouped mode: cap glyph at the very start of the line (outside the first group).'
-        },
-        {
-            label: formatPowerlineMenuLabel('Line End Cap'),
-            sublabel: `(${getGroupFieldDisplay(powerlineConfig.lineEndCap, 'endCap')})`,
-            value: 'lineEndCap',
-            disabled: groupModeDisabled,
-            description: 'Grouped mode: cap glyph at the very end of the line (outside the last group).'
         }
     ];
 
@@ -426,28 +409,6 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
         );
     }
 
-    if (screen === 'lineStartCap') {
-        return (
-            <PowerlineSeparatorEditor
-                settings={settings}
-                mode='lineStartCap'
-                onUpdate={onUpdate}
-                onBack={() => { setScreen('menu'); }}
-            />
-        );
-    }
-
-    if (screen === 'lineEndCap') {
-        return (
-            <PowerlineSeparatorEditor
-                settings={settings}
-                mode='lineEndCap'
-                onUpdate={onUpdate}
-                onBack={() => { setScreen('menu'); }}
-            />
-        );
-    }
-
     if (screen === 'themes') {
         return (
             <PowerlineThemeSelector
@@ -640,7 +601,7 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
                                     Continue Theme keeps the Powerline color sequence running across lines.
                                 </Text>
                                 <Text dimColor>
-                                    Groups Enabled switches to the grouped render path (Widget Separator, Group/Line caps below).
+                                    Groups Enabled switches to the grouped render path (Widget Separator, Group caps below).
                                 </Text>
                                 <Text dimColor>
                                     The flat and grouped fields are independent — toggling Groups Enabled does not copy values between them.

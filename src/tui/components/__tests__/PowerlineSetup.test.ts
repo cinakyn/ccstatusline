@@ -62,7 +62,7 @@ describe('PowerlineSetup helpers', () => {
         }, false);
 
         // Flat-mode fields (indices 0-2) are active; grouped-mode fields
-        // (indices 3-7) are disabled because groupsEnabled=false.
+        // (indices 3-5) are disabled because groupsEnabled=false.
         expect(enabledItems[0]).toMatchObject({
             value: 'separator',
             sublabel: '(multiple)',
@@ -108,8 +108,6 @@ describe('PowerlineSetup helpers', () => {
         expect(byValue.widgetSeparator?.disabled).toBe(false);
         expect(byValue.groupStartCap?.disabled).toBe(false);
         expect(byValue.groupEndCap?.disabled).toBe(false);
-        expect(byValue.lineStartCap?.disabled).toBe(false);
-        expect(byValue.lineEndCap?.disabled).toBe(false);
         expect(byValue.groupStartCap?.sublabel).toBe('(\uE0B6 - Round)');
         expect(byValue.groupEndCap?.sublabel).toBe('(\uE0B4 - Round)');
     });

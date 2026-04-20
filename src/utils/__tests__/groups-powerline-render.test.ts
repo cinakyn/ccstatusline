@@ -74,8 +74,6 @@ function createPowerlineSettings(overrides: SettingsInput = {}): Settings {
             groupStartCap: [],
             groupEndCap: [],
             groupGap: '  ',
-            lineStartCap: [],
-            lineEndCap: [],
             separatorInvertBackground: [false],
             theme: undefined,
             ...(plOverrides ?? {})

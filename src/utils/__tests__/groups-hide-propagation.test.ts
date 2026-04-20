@@ -105,8 +105,6 @@ function powerlineSettings(overrides: SettingsInput = {}): Settings {
             groupStartCap: [],
             groupEndCap: [],
             groupGap: '  ',
-            lineStartCap: [],
-            lineEndCap: [],
             separatorInvertBackground: [false],
             theme: undefined,
             ...(plOverrides ?? {})
@@ -190,12 +188,11 @@ describe('B4 powerline: middle group hidden', () => {
     });
 });
 
-// 8. First group hidden (powerline) — lineStartCap suppressed (Option B)
+// 8. First group hidden (powerline) — leading gap suppressed
 describe('B4 powerline: first group hidden', () => {
-    it('output starts with groups[1] content; lineStartCap not emitted', () => {
+    it('output starts with groups[1] content; leading gap not emitted', () => {
         setGitResponses(() => new Error('not a git repo'));
 
-        const LSC = '[[';
         const gap = '---';
         const line: Line = {
             groups: [
@@ -204,25 +201,18 @@ describe('B4 powerline: first group hidden', () => {
             ]
         };
 
-        const settings = powerlineSettings({ powerline: { lineStartCap: [LSC] } });
-        const result = stripSgrCodes(renderLine(line, settings));
+        const result = stripSgrCodes(renderLine(line, powerlineSettings()));
 
         expect(result).not.toContain('HIDDEN');
         expect(result).toContain('Beta');
         // No gap (Beta is the first visible group → no leading gap)
         expect(result).not.toContain(gap);
-        // lineStartCap suppressed because first group is hidden (Option B behaviour
-        // when we re-evaluate: actually LSC is only suppressed when ALL groups hidden.
-        // When the first group is hidden but a later group is visible, lineStartCap
-        // DOES emit — the spec Option B only suppresses caps when NO groups are visible.)
-        // Concrete: LSC emits (colored by Beta's bg), then Beta content follows.
-        expect(result).toContain(LSC);
     });
 });
 
 // 9. All groups hidden (powerline) → empty string (Option B)
 describe('B4 powerline: all groups hidden', () => {
-    it('returns empty string (no lineStartCap, no lineEndCap, no content)', () => {
+    it('returns empty string (no content)', () => {
         setGitResponses(() => new Error('not a git repo'));
 
         const line: Line = {
@@ -232,14 +222,9 @@ describe('B4 powerline: all groups hidden', () => {
             ]
         };
 
-        const result = stripSgrCodes(renderLine(line, powerlineSettings({
-            powerline: {
-                lineStartCap: ['[['],
-                lineEndCap: [']]']
-            }
-        })));
+        const result = stripSgrCodes(renderLine(line, powerlineSettings()));
 
-        // No caps and no content when all groups hidden
+        // No content when all groups hidden
         expect(result).toBe('');
     });
 });

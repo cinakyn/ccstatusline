@@ -376,13 +376,11 @@ function isGroupHidden(preRenderedSlice: PreRenderedWidget[]): boolean {
  * Render a multi-group line in powerline mode.
  *
  * Render sequence (spec §R1):
- *   lineStartCap₀
  *   groupStartCap₀ W₁ sep W₂ … groupEndCap₀
  *   groupGap
  *   groupStartCap₁ … groupEndCap₁
  *   groupGap
  *   …
- *   lineEndCap₀
  *
  * Called only when `settings.groupsEnabled === true` AND `line.groups.length > 1`.
  *
@@ -421,13 +419,9 @@ function renderGroupedPowerlineStatusLine(
     const groupStartCaps = (config.groupStartCap as string[] | undefined) ?? [];
     const groupEndCaps = (config.groupEndCap as string[] | undefined) ?? [];
     const groupGapStr = (config.groupGap as string | undefined) ?? '  ';
-    const lineStartCaps = (config.lineStartCap as string[] | undefined) ?? [];
-    const lineEndCaps = (config.lineEndCap as string[] | undefined) ?? [];
 
-    // Resolve per-line caps (cycle through arrays by line index)
+    // Per-line index used to cycle through cap arrays (same semantic as v3 startCaps).
     const capLineIndex = context.lineIndex ?? lineIndex;
-    const lineStartCap = lineStartCaps.length > 0 ? (lineStartCaps[capLineIndex % lineStartCaps.length] ?? '') : '';
-    const lineEndCap = lineEndCaps.length > 0 ? (lineEndCaps[capLineIndex % lineEndCaps.length] ?? '') : '';
 
     // Theme colors
     const themeName = config.theme as string | undefined;
@@ -703,7 +697,7 @@ function renderGroupedPowerlineStatusLine(
     // Pass 2: Compute natural (non-flex) widths for flex budget (R3).
     // Natural width of a group = groupStartCap + all widget content + all intra-
     // group separators (one per gap between adjacent elements, excluding merges)
-    // + groupEndCap.  lineStartCap / lineEndCap / groupGap are counted globally.
+    // + groupEndCap.  groupGap is counted globally.
     // -----------------------------------------------------------------------
 
     let flexBudget = 0;
@@ -712,11 +706,7 @@ function renderGroupedPowerlineStatusLine(
     const visibleGroupData = groupData.filter(gd => !gd.isHidden);
 
     if (terminalWidth) {
-        // Fixed overhead: lineStartCap + lineEndCap — but only if at least one
-        // visible group exists (Option B: suppress caps when all groups hidden).
-        let fixedWidth = visibleGroupData.length > 0
-            ? getVisibleWidth(lineStartCap) + getVisibleWidth(lineEndCap)
-            : 0;
+        let fixedWidth = 0;
 
         // Gap between adjacent VISIBLE groups: count (visibleGroupData.length - 1) gaps.
         // Use the gap string of the second (and beyond) visible group entry from
@@ -902,37 +892,14 @@ function renderGroupedPowerlineStatusLine(
     // -----------------------------------------------------------------------
     let result = '';
 
-    // B4 Option B: only emit lineStartCap / lineEndCap when at least one visible
-    // group exists.  A line with zero visible content renders as empty string.
-    if (visibleGroupData.length > 0) {
-        // lineStartCap (colored like first visible group's first element's bg)
-        if (lineStartCap) {
-            const firstVisibleGroup = visibleGroupData[0];
-            result += renderPowerlineCap(lineStartCap, firstVisibleGroup?.elements[0]?.bgColor, colorLevel);
-        }
-    }
-
-    // Visible groups joined by their leading gaps
+    // Visible groups joined by their leading gaps.  A line with zero visible
+    // content renders as empty string.
     for (let vi = 0; vi < renderedGroups.length; vi++) {
         const gap = renderedGroupGaps[vi] ?? '';
         const groupStr = renderedGroups[vi];
         result += gap;
         if (groupStr !== undefined)
             result += groupStr;
-    }
-
-    if (visibleGroupData.length > 0) {
-        // lineEndCap (colored like last visible group's last element's bg)
-        if (lineEndCap) {
-            const lastVisibleGd = visibleGroupData[visibleGroupData.length - 1];
-            const lastBgColor = lastVisibleGd?.elements[lastVisibleGd.elements.length - 1]?.bgColor;
-            result += renderPowerlineCap(lineEndCap, lastBgColor, colorLevel);
-            // Bold reset after lineEndCap if the last element was bold
-            const lastEl = lastVisibleGd?.elements[lastVisibleGd.elements.length - 1];
-            const lastBold = Boolean(settings.globalBold || lastEl?.bold);
-            if (lastBold)
-                result += '\x1b[22m';
-        }
     }
 
     result += chalk.reset('');

@@ -216,11 +216,9 @@ export const migrations: Migration[] = [
  *
  * Under the mode-split design the legacy v3 fields (`separators` / `startCaps`
  * / `endCaps`) are the source of truth when `groupsEnabled` is false, and the
- * new per-group / per-line fields are the source of truth when `groupsEnabled`
- * is true.  The two sets are intentionally independent — auto-copying legacy
- * caps into the new fields caused duplicate cap rendering at line boundaries
- * (same glyph emitted once as `lineStartCap` and again as `groupStartCap` of
- * the first group).
+ * new per-group fields are the source of truth when `groupsEnabled` is true.
+ * The two sets are intentionally independent — auto-copying legacy caps into
+ * the new fields caused duplicate cap rendering at group boundaries.
  *
  * So this helper no longer mirrors legacy values into new fields.  It only
  * guarantees `groupGap` has a string default — the Zod schema handles the rest

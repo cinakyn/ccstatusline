@@ -48,7 +48,7 @@ describe('PowerlineSetup helpers', () => {
         const disabledItems = buildPowerlineSetupMenuItems({
             ...DEFAULT_SETTINGS.powerline,
             enabled: false
-        });
+        }, false);
 
         expect(disabledItems.every(item => item.disabled)).toBe(true);
 
@@ -59,25 +59,59 @@ describe('PowerlineSetup helpers', () => {
             startCaps: [],
             endCaps: ['\uE0BC'],
             theme: undefined
-        });
+        }, false);
 
+        // Flat-mode fields (indices 0-2) are active; grouped-mode fields
+        // (indices 3-7) are disabled because groupsEnabled=false.
         expect(enabledItems[0]).toMatchObject({
-            label: 'Separator  ',
+            value: 'separator',
             sublabel: '(multiple)',
             disabled: false
         });
         expect(enabledItems[1]).toMatchObject({
-            label: 'Start Cap  ',
-            sublabel: '(none)'
+            value: 'startCap',
+            sublabel: '(none)',
+            disabled: false
         });
         expect(enabledItems[2]).toMatchObject({
-            label: 'End Cap    ',
-            sublabel: '(\uE0BC - Diagonal)'
+            value: 'endCap',
+            sublabel: '(\uE0BC - Diagonal)',
+            disabled: false
         });
         expect(enabledItems[3]).toMatchObject({
-            label: 'Themes     ',
-            sublabel: '(Custom)'
+            value: 'widgetSeparator',
+            disabled: true
         });
+        expect(enabledItems[4]).toMatchObject({
+            value: 'groupStartCap',
+            disabled: true
+        });
+        expect(enabledItems[enabledItems.length - 1]).toMatchObject({
+            value: 'themes',
+            sublabel: '(Custom)',
+            disabled: false
+        });
+    });
+
+    it('disables flat-mode entries and enables grouped-mode entries when groupsEnabled=true', () => {
+        const items = buildPowerlineSetupMenuItems({
+            ...DEFAULT_SETTINGS.powerline,
+            enabled: true,
+            groupStartCap: ['\uE0B6'],
+            groupEndCap: ['\uE0B4']
+        }, true);
+
+        const byValue = Object.fromEntries(items.map(item => [item.value, item]));
+        expect(byValue.separator?.disabled).toBe(true);
+        expect(byValue.startCap?.disabled).toBe(true);
+        expect(byValue.endCap?.disabled).toBe(true);
+        expect(byValue.widgetSeparator?.disabled).toBe(false);
+        expect(byValue.groupStartCap?.disabled).toBe(false);
+        expect(byValue.groupEndCap?.disabled).toBe(false);
+        expect(byValue.lineStartCap?.disabled).toBe(false);
+        expect(byValue.lineEndCap?.disabled).toBe(false);
+        expect(byValue.groupStartCap?.sublabel).toBe('(\uE0B6 - Round)');
+        expect(byValue.groupEndCap?.sublabel).toBe('(\uE0B4 - Round)');
     });
 
     it('toggles continue theme across lines when (c) is pressed', async () => {

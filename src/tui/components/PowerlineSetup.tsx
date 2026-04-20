@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import type { PowerlineConfig } from '../../types/PowerlineConfig';
 import type { Settings } from '../../types/Settings';
 import { lineWidgets } from '../../utils/groups';
+import { shouldInsertInput } from '../../utils/input-guards';
 import { type PowerlineFontStatus } from '../../utils/powerline';
 import { buildEnabledPowerlineSettings } from '../../utils/powerline-settings';
 
@@ -20,9 +21,18 @@ import {
 import { PowerlineSeparatorEditor } from './PowerlineSeparatorEditor';
 import { PowerlineThemeSelector } from './PowerlineThemeSelector';
 
-type PowerlineMenuValue = 'separator' | 'startCap' | 'endCap' | 'themes';
+type PowerlineMenuValue
+    = | 'separator'
+        | 'startCap'
+        | 'endCap'
+        | 'themes'
+        | 'widgetSeparator'
+        | 'groupStartCap'
+        | 'groupEndCap'
+        | 'lineStartCap'
+        | 'lineEndCap';
 type Screen = 'menu' | PowerlineMenuValue;
-const POWERLINE_MENU_LABEL_WIDTH = 11;
+const POWERLINE_MENU_LABEL_WIDTH = 18;
 
 function formatPowerlineMenuLabel(label: string): string {
     return label.padEnd(POWERLINE_MENU_LABEL_WIDTH, ' ');
@@ -93,6 +103,53 @@ export function getCapDisplay(
     return `${cap} - Custom`;
 }
 
+/**
+ * Display helper for the group-mode fields (widgetSeparator / groupStartCap /
+ * groupEndCap / lineStartCap / lineEndCap).  An empty array renders as "none"
+ * because the grouped renderer treats an empty cap array as "do not emit this
+ * cap at all", which is a meaningfully different state from "single default
+ * glyph".
+ */
+function getGroupFieldDisplay(
+    caps: readonly string[],
+    kind: 'separator' | 'startCap' | 'endCap'
+): string {
+    if (caps.length === 0) {
+        return 'none';
+    }
+    if (caps.length > 1) {
+        return 'multiple';
+    }
+    const cap = caps[0];
+    if (!cap) {
+        return 'none';
+    }
+    const separatorPresets = [
+        { char: '\uE0B0', name: 'Triangle Right' },
+        { char: '\uE0B2', name: 'Triangle Left' },
+        { char: '\uE0B4', name: 'Round Right' },
+        { char: '\uE0B6', name: 'Round Left' }
+    ];
+    const startPresets = [
+        { char: '\uE0B2', name: 'Triangle' },
+        { char: '\uE0B6', name: 'Round' },
+        { char: '\uE0BA', name: 'Lower Triangle' },
+        { char: '\uE0BE', name: 'Diagonal' }
+    ];
+    const endPresets = [
+        { char: '\uE0B0', name: 'Triangle' },
+        { char: '\uE0B4', name: 'Round' },
+        { char: '\uE0B8', name: 'Lower Triangle' },
+        { char: '\uE0BC', name: 'Diagonal' }
+    ];
+    const presets = kind === 'separator' ? separatorPresets : kind === 'startCap' ? startPresets : endPresets;
+    const preset = presets.find(item => item.char === cap);
+    if (preset) {
+        return `${preset.char} - ${preset.name}`;
+    }
+    return `${cap} - Custom`;
+}
+
 export function getThemeDisplay(powerlineConfig: PowerlineConfig): string {
     const theme = powerlineConfig.theme;
 
@@ -104,32 +161,78 @@ export function getThemeDisplay(powerlineConfig: PowerlineConfig): string {
 }
 
 export function buildPowerlineSetupMenuItems(
-    powerlineConfig: PowerlineConfig
+    powerlineConfig: PowerlineConfig,
+    groupsEnabled: boolean
 ): ListEntry<PowerlineMenuValue>[] {
     const disabled = !powerlineConfig.enabled;
+    const legacyDisabled = disabled || groupsEnabled;
+    const groupModeDisabled = disabled || !groupsEnabled;
 
-    return [
+    const flatGroup: ListEntry<PowerlineMenuValue>[] = [
         {
             label: formatPowerlineMenuLabel('Separator'),
             sublabel: `(${getSeparatorDisplay(powerlineConfig)})`,
             value: 'separator',
-            disabled,
-            description: 'Choose the glyph used between powerline segments.'
+            disabled: legacyDisabled,
+            description: 'Flat-mode: glyph used between powerline widgets when Groups Enabled is off.'
         },
         {
             label: formatPowerlineMenuLabel('Start Cap'),
             sublabel: `(${getCapDisplay(powerlineConfig, 'start')})`,
             value: 'startCap',
-            disabled,
-            description: 'Configure the cap glyph that appears at the start of each powerline line.'
+            disabled: legacyDisabled,
+            description: 'Flat-mode: cap glyph at the start of each powerline line when Groups Enabled is off.'
         },
         {
             label: formatPowerlineMenuLabel('End Cap'),
             sublabel: `(${getCapDisplay(powerlineConfig, 'end')})`,
             value: 'endCap',
-            disabled,
-            description: 'Configure the cap glyph that appears at the end of each powerline line.'
+            disabled: legacyDisabled,
+            description: 'Flat-mode: cap glyph at the end of each powerline line when Groups Enabled is off.'
+        }
+    ];
+
+    const groupModeItems: ListEntry<PowerlineMenuValue>[] = [
+        {
+            label: formatPowerlineMenuLabel('Widget Separator'),
+            sublabel: `(${getGroupFieldDisplay(powerlineConfig.widgetSeparator, 'separator')})`,
+            value: 'widgetSeparator',
+            disabled: groupModeDisabled,
+            description: 'Grouped mode: glyph between widgets within a group.'
         },
+        {
+            label: formatPowerlineMenuLabel('Group Start Cap'),
+            sublabel: `(${getGroupFieldDisplay(powerlineConfig.groupStartCap, 'startCap')})`,
+            value: 'groupStartCap',
+            disabled: groupModeDisabled,
+            description: 'Grouped mode: cap glyph at the start of each widget group.'
+        },
+        {
+            label: formatPowerlineMenuLabel('Group End Cap'),
+            sublabel: `(${getGroupFieldDisplay(powerlineConfig.groupEndCap, 'endCap')})`,
+            value: 'groupEndCap',
+            disabled: groupModeDisabled,
+            description: 'Grouped mode: cap glyph at the end of each widget group.'
+        },
+        {
+            label: formatPowerlineMenuLabel('Line Start Cap'),
+            sublabel: `(${getGroupFieldDisplay(powerlineConfig.lineStartCap, 'startCap')})`,
+            value: 'lineStartCap',
+            disabled: groupModeDisabled,
+            description: 'Grouped mode: cap glyph at the very start of the line (outside the first group).'
+        },
+        {
+            label: formatPowerlineMenuLabel('Line End Cap'),
+            sublabel: `(${getGroupFieldDisplay(powerlineConfig.lineEndCap, 'endCap')})`,
+            value: 'lineEndCap',
+            disabled: groupModeDisabled,
+            description: 'Grouped mode: cap glyph at the very end of the line (outside the last group).'
+        }
+    ];
+
+    return [
+        ...flatGroup,
+        ...groupModeItems,
         {
             label: formatPowerlineMenuLabel('Themes'),
             sublabel: `(${getThemeDisplay(powerlineConfig)})`,
@@ -162,10 +265,13 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
     onClearMessage
 }) => {
     const powerlineConfig = settings.powerline;
+    const groupsEnabled = settings.groupsEnabled;
     const [screen, setScreen] = useState<Screen>('menu');
     const [selectedMenuItem, setSelectedMenuItem] = useState(0);
     const [confirmingEnable, setConfirmingEnable] = useState(false);
     const [confirmingFontInstall, setConfirmingFontInstall] = useState(false);
+    const [editingGroupGap, setEditingGroupGap] = useState(false);
+    const [groupGapInput, setGroupGapInput] = useState(settings.defaultGroupGap);
 
     const hasSeparatorItems = settings.lines.some(line => lineWidgets(line).some(
         item => item.type === 'separator' || item.type === 'flex-separator'
@@ -180,6 +286,26 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
         }
 
         if (confirmingFontInstall || confirmingEnable) {
+            return;
+        }
+
+        if (editingGroupGap) {
+            if (key.return) {
+                onUpdate({
+                    ...settings,
+                    defaultGroupGap: groupGapInput
+                });
+                setEditingGroupGap(false);
+            } else if (key.escape) {
+                setGroupGapInput(settings.defaultGroupGap);
+                setEditingGroupGap(false);
+            } else if (key.backspace) {
+                setGroupGapInput(groupGapInput.slice(0, -1));
+            } else if (key.delete) {
+                // No-op: simple inputs without cursor.
+            } else if (shouldInsertInput(input, key)) {
+                setGroupGapInput(groupGapInput + input);
+            }
             return;
         }
 
@@ -220,6 +346,16 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
                         continueThemeAcrossLines: !powerlineConfig.continueThemeAcrossLines
                     }
                 });
+            } else if ((input === 'n' || input === 'N') && powerlineConfig.enabled) {
+                // Toggle group mode (powerline-only feature)
+                onUpdate({
+                    ...settings,
+                    groupsEnabled: !groupsEnabled
+                });
+            } else if ((input === 'g' || input === 'G') && powerlineConfig.enabled) {
+                // Edit default group gap
+                setGroupGapInput(settings.defaultGroupGap);
+                setEditingGroupGap(true);
             }
         }
     });
@@ -251,6 +387,61 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
             <PowerlineSeparatorEditor
                 settings={settings}
                 mode='endCap'
+                onUpdate={onUpdate}
+                onBack={() => { setScreen('menu'); }}
+            />
+        );
+    }
+
+    if (screen === 'widgetSeparator') {
+        return (
+            <PowerlineSeparatorEditor
+                settings={settings}
+                mode='widgetSeparator'
+                onUpdate={onUpdate}
+                onBack={() => { setScreen('menu'); }}
+            />
+        );
+    }
+
+    if (screen === 'groupStartCap') {
+        return (
+            <PowerlineSeparatorEditor
+                settings={settings}
+                mode='groupStartCap'
+                onUpdate={onUpdate}
+                onBack={() => { setScreen('menu'); }}
+            />
+        );
+    }
+
+    if (screen === 'groupEndCap') {
+        return (
+            <PowerlineSeparatorEditor
+                settings={settings}
+                mode='groupEndCap'
+                onUpdate={onUpdate}
+                onBack={() => { setScreen('menu'); }}
+            />
+        );
+    }
+
+    if (screen === 'lineStartCap') {
+        return (
+            <PowerlineSeparatorEditor
+                settings={settings}
+                mode='lineStartCap'
+                onUpdate={onUpdate}
+                onBack={() => { setScreen('menu'); }}
+            />
+        );
+    }
+
+    if (screen === 'lineEndCap') {
+        return (
+            <PowerlineSeparatorEditor
+                settings={settings}
+                mode='lineEndCap'
                 onUpdate={onUpdate}
                 onBack={() => { setScreen('menu'); }}
             />
@@ -377,6 +568,14 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
                         <Text dimColor>Press any key to continue...</Text>
                     </Box>
                 </Box>
+            ) : editingGroupGap ? (
+                <Box flexDirection='column' marginTop={1}>
+                    <Box>
+                        <Text>Enter default group gap (placed between groups): </Text>
+                        <Text color='cyan'>{groupGapInput ? `"${groupGapInput}"` : '(empty)'}</Text>
+                    </Box>
+                    <Text dimColor>Press Enter to save, ESC to cancel</Text>
+                </Box>
             ) : (
                 <>
                     <Box flexDirection='column'>
@@ -397,7 +596,7 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
                     </Box>
 
                     <Box>
-                        <Text> Powerline Mode: </Text>
+                        <Text>   Powerline Mode: </Text>
                         <Text color={powerlineConfig.enabled ? 'green' : 'red'}>
                             {powerlineConfig.enabled ? '✓ Enabled  ' : '✗ Disabled '}
                         </Text>
@@ -407,7 +606,7 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
                     {powerlineConfig.enabled && (
                         <>
                             <Box>
-                                <Text>  Align Widgets: </Text>
+                                <Text>    Align Widgets: </Text>
                                 <Text color={powerlineConfig.autoAlign ? 'green' : 'red'}>
                                     {powerlineConfig.autoAlign ? '✓ Enabled  ' : '✗ Disabled '}
                                 </Text>
@@ -415,19 +614,36 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
                             </Box>
 
                             <Box>
-                                <Text> Continue Theme: </Text>
+                                <Text>   Continue Theme: </Text>
                                 <Text color={powerlineConfig.continueThemeAcrossLines ? 'green' : 'red'}>
                                     {powerlineConfig.continueThemeAcrossLines ? '✓ Enabled  ' : '✗ Disabled '}
                                 </Text>
                                 <Text dimColor> - Press (c) to toggle</Text>
                             </Box>
 
+                            <Box>
+                                <Text>   Groups Enabled: </Text>
+                                <Text color={groupsEnabled ? 'green' : 'red'}>
+                                    {groupsEnabled ? '✓ Enabled  ' : '✗ Disabled '}
+                                </Text>
+                                <Text dimColor> - Press (n) to toggle</Text>
+                            </Box>
+
+                            <Box>
+                                <Text>Default Group Gap: </Text>
+                                <Text color='cyan'>{settings.defaultGroupGap ? `"${settings.defaultGroupGap}"` : '(empty)'}</Text>
+                                <Text dimColor> - Press (g) to edit</Text>
+                            </Box>
+
                             <Box flexDirection='column' marginTop={1}>
                                 <Text dimColor>
-                                    When enabled, global overrides are disabled and powerline separators are used
+                                    Continue Theme keeps the Powerline color sequence running across lines.
                                 </Text>
                                 <Text dimColor>
-                                    Continue Theme keeps the Powerline color sequence running across lines
+                                    Groups Enabled switches to the grouped render path (Widget Separator, Group/Line caps below).
+                                </Text>
+                                <Text dimColor>
+                                    The flat and grouped fields are independent — toggling Groups Enabled does not copy values between them.
                                 </Text>
                             </Box>
                         </>
@@ -435,13 +651,13 @@ export const PowerlineSetup: React.FC<PowerlineSetupProps> = ({
 
                     {!powerlineConfig.enabled && (
                         <Box marginTop={1}>
-                            <Text dimColor>Enable Powerline mode to configure separators, caps, and themes.</Text>
+                            <Text dimColor>Enable Powerline mode to configure separators, caps, groups, and themes.</Text>
                         </Box>
                     )}
 
                     <List
                         marginTop={1}
-                        items={buildPowerlineSetupMenuItems(powerlineConfig)}
+                        items={buildPowerlineSetupMenuItems(powerlineConfig, groupsEnabled)}
                         onSelect={(value) => {
                             if (value === 'back') {
                                 onBack();

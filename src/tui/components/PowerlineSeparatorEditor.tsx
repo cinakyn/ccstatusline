@@ -8,7 +8,26 @@ import React, { useState } from 'react';
 import type { Settings } from '../../types/Settings';
 import { shouldInsertInput } from '../../utils/input-guards';
 
-export type EditorMode = 'separator' | 'startCap' | 'endCap';
+export type EditorMode
+    = | 'separator'
+        | 'startCap'
+        | 'endCap'
+        | 'widgetSeparator'
+        | 'groupStartCap'
+        | 'groupEndCap'
+        | 'lineStartCap'
+        | 'lineEndCap';
+
+const SEPARATOR_MODES = new Set<EditorMode>(['separator', 'widgetSeparator']);
+const START_CAP_MODES = new Set<EditorMode>(['startCap', 'groupStartCap', 'lineStartCap']);
+
+function isSeparatorLike(mode: EditorMode): boolean {
+    return SEPARATOR_MODES.has(mode);
+}
+
+function isStartCapLike(mode: EditorMode): boolean {
+    return START_CAP_MODES.has(mode);
+}
 
 export interface PowerlineSeparatorEditorProps {
     settings: Settings;
@@ -26,7 +45,7 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
     const powerlineConfig = settings.powerline;
 
     // Get the appropriate array based on mode
-    const getItems = () => {
+    const getItems = (): string[] => {
         switch (mode) {
             case 'separator':
                 return powerlineConfig.separators;
@@ -34,10 +53,24 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                 return powerlineConfig.startCaps;
             case 'endCap':
                 return powerlineConfig.endCaps;
+            case 'widgetSeparator':
+                return powerlineConfig.widgetSeparator;
+            case 'groupStartCap':
+                return powerlineConfig.groupStartCap;
+            case 'groupEndCap':
+                return powerlineConfig.groupEndCap;
+            case 'lineStartCap':
+                return powerlineConfig.lineStartCap;
+            case 'lineEndCap':
+                return powerlineConfig.lineEndCap;
         }
     };
 
     const separators = getItems();
+    // Background inversion is only supported on the legacy `separator` mode,
+    // which has its own parallel `separatorInvertBackground` array.  The new
+    // `widgetSeparator` (grouped path) does not currently have an inversion
+    // array — see PowerlineConfig schema — so treat invert as always-off.
     const invertBgs = mode === 'separator'
         ? powerlineConfig.separatorInvertBackground
         : [];
@@ -49,14 +82,14 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
 
     // Get presets based on mode
     const getPresets = () => {
-        if (mode === 'separator') {
+        if (isSeparatorLike(mode)) {
             return [
                 { char: '\uE0B0', name: 'Triangle Right', hex: 'E0B0' },
                 { char: '\uE0B2', name: 'Triangle Left', hex: 'E0B2' },
                 { char: '\uE0B4', name: 'Round Right', hex: 'E0B4' },
                 { char: '\uE0B6', name: 'Round Left', hex: 'E0B6' }
             ];
-        } else if (mode === 'startCap') {
+        } else if (isStartCapLike(mode)) {
             return [
                 { char: '\uE0B2', name: 'Triangle', hex: 'E0B2' },
                 { char: '\uE0B6', name: 'Round', hex: 'E0B6' },
@@ -101,6 +134,21 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                 break;
             case 'endCap':
                 updatedPowerline.endCaps = newSeparators;
+                break;
+            case 'widgetSeparator':
+                updatedPowerline.widgetSeparator = newSeparators;
+                break;
+            case 'groupStartCap':
+                updatedPowerline.groupStartCap = newSeparators;
+                break;
+            case 'groupEndCap':
+                updatedPowerline.groupEndCap = newSeparators;
+                break;
+            case 'lineStartCap':
+                updatedPowerline.lineStartCap = newSeparators;
+                break;
+            case 'lineEndCap':
+                updatedPowerline.lineEndCap = newSeparators;
                 break;
         }
 
@@ -184,7 +232,7 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                 }
 
                 updateSeparators(newSeparators, mode === 'separator' ? newInvertBgs : undefined);
-            } else if ((input === 'a' || input === 'A') && (mode === 'separator' || separators.length < 3)) {
+            } else if ((input === 'a' || input === 'A') && (isSeparatorLike(mode) || separators.length < 3)) {
                 // Add after current (max 3 for caps)
                 const newSeparators = [...separators];
                 const newInvertBgs = mode === 'separator' ? [...invertBgs] : [];
@@ -207,7 +255,7 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                     updateSeparators(newSeparators, newInvertBgs);
                     setSelectedIndex(selectedIndex + 1);
                 }
-            } else if ((input === 'i' || input === 'I') && (mode === 'separator' || separators.length < 3)) {
+            } else if ((input === 'i' || input === 'I') && (isSeparatorLike(mode) || separators.length < 3)) {
                 // Insert before current (max 3 for caps)
                 const newSeparators = [...separators];
                 const newInvertBgs = mode === 'separator' ? [...invertBgs] : [];
@@ -230,17 +278,17 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                     updateSeparators(newSeparators, newInvertBgs);
                     // Keep selection on the newly inserted item (which is now at selectedIndex)
                 }
-            } else if ((input === 'd' || input === 'D') && (mode !== 'separator' || separators.length > 1)) {
-                // Delete current (min 1 for separator, no min for caps)
+            } else if ((input === 'd' || input === 'D') && (!isSeparatorLike(mode) || separators.length > 1)) {
+                // Delete current (min 1 for separator-like, no min for caps)
                 const newSeparators = separators.filter((_, i) => i !== selectedIndex);
                 const newInvertBgs = mode === 'separator' ? invertBgs.filter((_, i) => i !== selectedIndex) : [];
                 updateSeparators(newSeparators, newInvertBgs);
                 setSelectedIndex(Math.min(selectedIndex, Math.max(0, newSeparators.length - 1)));
             } else if (input === 'c' || input === 'C') {
                 // Clear all
-                if (mode === 'separator') {
-                    // Reset to default right-facing separator with no inversion
-                    updateSeparators(['\uE0B0'], [false]);
+                if (isSeparatorLike(mode)) {
+                    // Reset to default right-facing separator (invert only applies to legacy separator)
+                    updateSeparators(['\uE0B0'], mode === 'separator' ? [false] : undefined);
                 } else {
                     updateSeparators([]);
                 }
@@ -267,11 +315,21 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                 return 'Powerline Start Cap Configuration';
             case 'endCap':
                 return 'Powerline End Cap Configuration';
+            case 'widgetSeparator':
+                return 'Powerline Widget Separator (grouped mode)';
+            case 'groupStartCap':
+                return 'Powerline Group Start Cap';
+            case 'groupEndCap':
+                return 'Powerline Group End Cap';
+            case 'lineStartCap':
+                return 'Powerline Line Start Cap (grouped mode)';
+            case 'lineEndCap':
+                return 'Powerline Line End Cap (grouped mode)';
         }
     };
 
-    const canAdd = mode === 'separator' || separators.length < 3;
-    const canDelete = mode !== 'separator' || separators.length > 1;
+    const canAdd = isSeparatorLike(mode) || separators.length < 3;
+    const canDelete = !isSeparatorLike(mode) || separators.length > 1;
 
     return (
         <Box flexDirection='column'>
@@ -282,7 +340,7 @@ export const PowerlineSeparatorEditor: React.FC<PowerlineSeparatorEditorProps> =
                     <Text>
                         Enter hex code (4-6 digits) for
                         {' '}
-                        {mode === 'separator' ? 'separator' : 'cap'}
+                        {isSeparatorLike(mode) ? 'separator' : 'cap'}
                         {separators.length > 0 ? ` ${selectedIndex + 1}` : ''}
                         :
                     </Text>

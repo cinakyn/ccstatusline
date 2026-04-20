@@ -41,15 +41,12 @@ export interface GlobalOverridesMenuProps {
 export const GlobalOverridesMenu: React.FC<GlobalOverridesMenuProps> = ({ settings, onUpdate, onBack }) => {
     const [editingPadding, setEditingPadding] = useState(false);
     const [editingSeparator, setEditingSeparator] = useState(false);
-    const [editingGroupGap, setEditingGroupGap] = useState(false);
     const [confirmingSeparator, setConfirmingSeparator] = useState(false);
     const [paddingInput, setPaddingInput] = useState(settings.defaultPadding ?? '');
     const [separatorInput, setSeparatorInput] = useState(settings.defaultSeparator ?? '');
-    const [groupGapInput, setGroupGapInput] = useState(settings.defaultGroupGap);
     const [inheritColors, setInheritColors] = useState(settings.inheritSeparatorColors);
     const [globalBold, setGlobalBold] = useState(settings.globalBold);
     const [minimalistMode, setMinimalistMode] = useState(settings.minimalistMode);
-    const [groupsEnabled, setGroupsEnabled] = useState(settings.groupsEnabled);
     const isPowerlineEnabled = settings.powerline.enabled;
 
     // Check if there are any manual separators in the current configuration
@@ -110,24 +107,6 @@ export const GlobalOverridesMenu: React.FC<GlobalOverridesMenuProps> = ({ settin
                 // For simple text inputs without cursor, forward delete does nothing
             } else if (shouldInsertInput(input, key)) {
                 setSeparatorInput(separatorInput + input);
-            }
-        } else if (editingGroupGap) {
-            if (key.return) {
-                const updatedSettings = {
-                    ...settings,
-                    defaultGroupGap: groupGapInput
-                };
-                onUpdate(updatedSettings);
-                setEditingGroupGap(false);
-            } else if (key.escape) {
-                setGroupGapInput(settings.defaultGroupGap);
-                setEditingGroupGap(false);
-            } else if (key.backspace) {
-                setGroupGapInput(groupGapInput.slice(0, -1));
-            } else if (key.delete) {
-                // For simple text inputs without cursor, forward delete does nothing
-            } else if (shouldInsertInput(input, key)) {
-                setGroupGapInput(groupGapInput + input);
             }
         } else if (confirmingSeparator) {
             // Skip input handling when confirmation is active - let ConfirmDialog handle it
@@ -197,17 +176,6 @@ export const GlobalOverridesMenu: React.FC<GlobalOverridesMenuProps> = ({ settin
                     overrideForegroundColor: undefined
                 };
                 onUpdate(updatedSettings);
-            } else if ((input === 'n' || input === 'N') && isPowerlineEnabled) {
-                // Toggle groups enabled (powerline-only feature)
-                const newGroupsEnabled = !groupsEnabled;
-                setGroupsEnabled(newGroupsEnabled);
-                const updatedSettings = {
-                    ...settings,
-                    groupsEnabled: newGroupsEnabled
-                };
-                onUpdate(updatedSettings);
-            } else if ((input === 'a' || input === 'A') && isPowerlineEnabled) {
-                setEditingGroupGap(true);
             }
         }
     });
@@ -236,14 +204,6 @@ export const GlobalOverridesMenu: React.FC<GlobalOverridesMenuProps> = ({ settin
                     <Box>
                         <Text>Enter default separator (placed between widgets): </Text>
                         <Text color='cyan'>{separatorInput ? `"${separatorInput}"` : '(empty - no separator will be added)'}</Text>
-                    </Box>
-                    <Text dimColor>Press Enter to save, ESC to cancel</Text>
-                </Box>
-            ) : editingGroupGap ? (
-                <Box flexDirection='column'>
-                    <Box>
-                        <Text>Enter default group gap (placed between groups): </Text>
-                        <Text color='cyan'>{groupGapInput ? `"${groupGapInput}"` : '(empty)'}</Text>
                     </Box>
                     <Text dimColor>Press Enter to save, ESC to cancel</Text>
                 </Box>
@@ -362,30 +322,6 @@ export const GlobalOverridesMenu: React.FC<GlobalOverridesMenuProps> = ({ settin
                         )}
                     </Box>
 
-                    <Box>
-                        <Text>   Groups Enabled: </Text>
-                        {isPowerlineEnabled ? (
-                            <>
-                                <Text color={groupsEnabled ? 'green' : 'red'}>{groupsEnabled ? '✓ Enabled' : '✗ Disabled'}</Text>
-                                <Text dimColor> - Press (n) to toggle</Text>
-                            </>
-                        ) : (
-                            <Text dimColor>[disabled - powerline only]</Text>
-                        )}
-                    </Box>
-
-                    <Box>
-                        <Text>Default Group Gap: </Text>
-                        {isPowerlineEnabled ? (
-                            <>
-                                <Text color='cyan'>{settings.defaultGroupGap ? `"${settings.defaultGroupGap}"` : '(none)'}</Text>
-                                <Text dimColor> - Press (a) to edit</Text>
-                            </>
-                        ) : (
-                            <Text dimColor>[disabled - powerline only]</Text>
-                        )}
-                    </Box>
-
                     <Box marginTop={2}>
                         <Text dimColor>Press ESC to go back</Text>
                     </Box>
@@ -407,10 +343,7 @@ export const GlobalOverridesMenu: React.FC<GlobalOverridesMenuProps> = ({ settin
                             • Override colors: All widgets will use these colors instead of their configured colors
                         </Text>
                         <Text dimColor wrap='wrap'>
-                            • Groups Enabled: Enables widget group layout with per-group gap control
-                        </Text>
-                        <Text dimColor wrap='wrap'>
-                            • Default Group Gap: String inserted between widget groups when Groups Enabled
+                            • Groups Enabled / Default Group Gap moved to Powerline Setup.
                         </Text>
                     </Box>
                 </>

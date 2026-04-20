@@ -412,21 +412,14 @@ function renderGroupedPowerlineStatusLine(
     const config = powerlineConfig ?? {};
     const continueThemeAcrossLines = Boolean(config.continueThemeAcrossLines);
 
-    // New vocabulary (B2 fields).  Fall back to the legacy v3 `startCaps` /
-    // `endCaps` fields for the group-cap role when the new vocabulary is
-    // empty — this covers configs that were migrated to v4 before the B2
-    // populate step existed, or that have been hand-edited since.  Line-cap
-    // fallback is deliberately NOT applied to avoid rendering the same cap
-    // twice (once at line boundary, once at group boundary) for configs that
-    // only ever had v3 `startCaps`.
+    // Grouped powerline path: use the new per-group / per-line vocabulary only.
+    // The legacy v3 `separators` / `startCaps` / `endCaps` fields are the source
+    // of truth for the flat (groupsEnabled=false) path and are not read here —
+    // the two modes are independent.
     const widgetSeparator = (config.widgetSeparator as string[] | undefined) ?? ['\uE0B0'];
     const invertBgs = (config.separatorInvertBackground as boolean[] | undefined) ?? widgetSeparator.map(() => false);
-    const legacyStartCaps = (config.startCaps as string[] | undefined) ?? [];
-    const legacyEndCaps = (config.endCaps as string[] | undefined) ?? [];
-    const rawGroupStartCaps = (config.groupStartCap as string[] | undefined) ?? [];
-    const rawGroupEndCaps = (config.groupEndCap as string[] | undefined) ?? [];
-    const groupStartCaps = rawGroupStartCaps.length > 0 ? rawGroupStartCaps : legacyStartCaps;
-    const groupEndCaps = rawGroupEndCaps.length > 0 ? rawGroupEndCaps : legacyEndCaps;
+    const groupStartCaps = (config.groupStartCap as string[] | undefined) ?? [];
+    const groupEndCaps = (config.groupEndCap as string[] | undefined) ?? [];
     const groupGapStr = (config.groupGap as string | undefined) ?? '  ';
     const lineStartCaps = (config.lineStartCap as string[] | undefined) ?? [];
     const lineEndCaps = (config.lineEndCap as string[] | undefined) ?? [];

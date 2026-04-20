@@ -38,7 +38,7 @@ function renderAllLines(settings: Settings, terminalWidth: number): string[] {
         const widgets = lineWidgets(line);
         const preRenderedWidgets = preRenderedLines[idx] ?? [];
         const lineContext: RenderContext = { ...context, lineIndex: idx };
-        return renderStatusLine(widgets, settings, lineContext, preRenderedWidgets, preCalculatedMaxWidths);
+        return renderStatusLine(widgets, settings, lineContext, preRenderedWidgets, preCalculatedMaxWidths, line);
     });
 }
 
@@ -68,11 +68,18 @@ function buildV4NativeSettings(
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: v3→v4 migration populates new fields from old fields
+// Under the mode-split design the legacy v3 fields (`separators` /
+// `startCaps` / `endCaps`) are the source of truth for the flat path, and
+// the new per-group / per-line fields are the source of truth for the
+// grouped path (groupsEnabled=true).  The v3→v4 migration therefore
+// intentionally leaves the new vocabulary fields at their schema defaults
+// rather than copying legacy caps into them — auto-copy used to cause
+// duplicate cap rendering at line boundaries (same glyph emitted as
+// `lineStartCap` AND `groupStartCap` of the first group).
 // ---------------------------------------------------------------------------
 
-describe('powerline vocabulary: v3→v4 migration field mapping', () => {
-    it('populates widgetSeparator, groupStartCap, groupEndCap, lineStartCap, lineEndCap, groupGap from old fields', () => {
+describe('powerline vocabulary: v3→v4 migration leaves new fields at schema defaults', () => {
+    it('does not copy legacy separators / startCaps / endCaps into new fields', () => {
         const migrated = migrateConfig({
             version: 3,
             lines: [[{ id: 'w-1', type: 'model' }]],
@@ -89,15 +96,24 @@ describe('powerline vocabulary: v3→v4 migration field mapping', () => {
         }, 4) as Record<string, unknown>;
 
         const pl = migrated.powerline as Record<string, unknown>;
-        expect(pl.widgetSeparator).toEqual(['A']);
-        expect(pl.groupStartCap).toEqual(['<']);
-        expect(pl.lineStartCap).toEqual(['<']);
-        expect(pl.groupEndCap).toEqual(['>']);
-        expect(pl.lineEndCap).toEqual(['>']);
+
+        // Migration only ensures groupGap default; it must not populate
+        // widgetSeparator / groupStartCap / groupEndCap / lineStartCap /
+        // lineEndCap from legacy values.
+        expect(pl.widgetSeparator).toBeUndefined();
+        expect(pl.groupStartCap).toBeUndefined();
+        expect(pl.groupEndCap).toBeUndefined();
+        expect(pl.lineStartCap).toBeUndefined();
+        expect(pl.lineEndCap).toBeUndefined();
         expect(pl.groupGap).toBe('  ');
+
+        // Legacy fields are preserved.
+        expect(pl.separators).toEqual(['A']);
+        expect(pl.startCaps).toEqual(['<']);
+        expect(pl.endCaps).toEqual(['>']);
     });
 
-    it('copies multi-element startCaps and endCaps arrays into all four cap fields', () => {
+    it('multi-element legacy cap arrays are preserved but not copied into new fields', () => {
         const migrated = migrateConfig({
             version: 3,
             lines: [[{ id: 'w-1', type: 'model' }]],
@@ -114,16 +130,22 @@ describe('powerline vocabulary: v3→v4 migration field mapping', () => {
         }, 4) as Record<string, unknown>;
 
         const pl = migrated.powerline as Record<string, unknown>;
-        expect(pl.widgetSeparator).toEqual(['\uE0B0', '\uE0B1']);
-        expect(pl.groupStartCap).toEqual(['\uE0B2', '\uE0B6']);
-        expect(pl.groupEndCap).toEqual(['\uE0B0', '\uE0B4']);
-        expect(pl.lineStartCap).toEqual(['\uE0B2', '\uE0B6']);
-        expect(pl.lineEndCap).toEqual(['\uE0B0', '\uE0B4']);
+        expect(pl.separators).toEqual(['\uE0B0', '\uE0B1']);
+        expect(pl.startCaps).toEqual(['\uE0B2', '\uE0B6']);
+        expect(pl.endCaps).toEqual(['\uE0B0', '\uE0B4']);
+
+        expect(pl.widgetSeparator).toBeUndefined();
+        expect(pl.groupStartCap).toBeUndefined();
+        expect(pl.groupEndCap).toBeUndefined();
+        expect(pl.lineStartCap).toBeUndefined();
+        expect(pl.lineEndCap).toBeUndefined();
     });
 });
 
 // ---------------------------------------------------------------------------
-// Test 2: byte-identity — v3 config renders identically after migration
+// Byte-identity: v3 config still renders identically after migration because
+// the flat path (default when groupsEnabled=false) continues to read the
+// legacy fields.
 // ---------------------------------------------------------------------------
 
 describe('powerline vocabulary: byte-identity after migration', () => {
@@ -170,11 +192,9 @@ describe('powerline vocabulary: byte-identity after migration', () => {
             powerline: powerlineOverride
         };
 
-        // Render directly from v4-native settings (ground truth)
         const v4NativeSettings = buildV4NativeSettings([flatLine], { powerline: powerlineOverride });
         const v4NativeRender = renderAllLines(v4NativeSettings, TERMINAL_WIDTH);
 
-        // Render from migrated v3 config
         const migratedSettings = migrateV3ToSettings(v3Config);
         const migratedRender = renderAllLines(migratedSettings, TERMINAL_WIDTH);
 
@@ -216,26 +236,16 @@ describe('powerline vocabulary: byte-identity after migration', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 3: new fields default correctly when v3 has no powerline key
+// Schema defaults fill in the new fields when the config itself omits them.
 // ---------------------------------------------------------------------------
 
-describe('powerline vocabulary: no powerline in v3 config', () => {
-    it('migration skips powerline vocab population when v3 has no powerline key', () => {
+describe('powerline vocabulary: schema defaults for new fields', () => {
+    it('no powerline key in v3 → schema defaults fill new vocab fields', () => {
         const migrated = migrateConfig({
             version: 3,
             lines: [[{ id: 'w-1', type: 'model' }]]
         }, 4) as Record<string, unknown>;
 
-        // No powerline key in v3 → migration does not synthesize one;
-        // schema defaults fill in when parsed.
-        // The raw migrated object should either lack powerline or have no new vocab fields.
-        if (Object.prototype.hasOwnProperty.call(migrated, 'powerline')) {
-            const pl = migrated.powerline as Record<string, unknown>;
-            // If present, it must not have been wrongly populated from undefined old fields
-            expect(Array.isArray(pl.widgetSeparator) || pl.widgetSeparator === undefined).toBe(true);
-        }
-
-        // Parsing through schema must succeed and produce schema defaults for vocab fields
         const parsed = SettingsSchema.safeParse(migrated);
         expect(parsed.success).toBe(true);
         if (parsed.success) {
@@ -247,90 +257,49 @@ describe('powerline vocabulary: no powerline in v3 config', () => {
             expect(parsed.data.powerline.groupGap).toBe('  ');
         }
     });
-});
 
-// ---------------------------------------------------------------------------
-// Test 4: old fields remain intact (cohabitation invariant)
-// ---------------------------------------------------------------------------
-
-describe('powerline vocabulary: old fields cohabitation', () => {
-    it('old fields separators, startCaps, endCaps survive migration alongside new fields', () => {
-        const v3Powerline = {
-            enabled: true,
-            separators: ['\uE0B0', '\uE0B1'],
-            separatorInvertBackground: [false, true],
-            startCaps: ['\uE0B2'],
-            endCaps: ['\uE0B0'],
-            theme: 'fire',
-            autoAlign: true,
-            continueThemeAcrossLines: true
-        };
-
+    it('v3 with legacy fields → parsed v4 has empty new caps, default widgetSeparator', () => {
         const migrated = migrateConfig({
             version: 3,
             lines: [[{ id: 'w-1', type: 'model' }]],
-            powerline: v3Powerline
-        }, 4) as Record<string, unknown>;
-
-        const pl = migrated.powerline as Record<string, unknown>;
-
-        // Old fields must be present and unchanged
-        expect(pl.separators).toEqual(['\uE0B0', '\uE0B1']);
-        expect(pl.separatorInvertBackground).toEqual([false, true]);
-        expect(pl.startCaps).toEqual(['\uE0B2']);
-        expect(pl.endCaps).toEqual(['\uE0B0']);
-        expect(pl.enabled).toBe(true);
-        expect(pl.theme).toBe('fire');
-        expect(pl.autoAlign).toBe(true);
-        expect(pl.continueThemeAcrossLines).toBe(true);
-
-        // New fields must also be present
-        expect(pl.widgetSeparator).toEqual(['\uE0B0', '\uE0B1']);
-        expect(pl.groupStartCap).toEqual(['\uE0B2']);
-        expect(pl.groupEndCap).toEqual(['\uE0B0']);
-        expect(pl.lineStartCap).toEqual(['\uE0B2']);
-        expect(pl.lineEndCap).toEqual(['\uE0B0']);
-        expect(pl.groupGap).toBe('  ');
-    });
-
-    it('new cap arrays are independent copies (not shared references with old fields)', () => {
-        const startCaps = ['\uE0B2'];
-        const endCaps = ['\uE0B0'];
-
-        const migrated = migrateConfig({
-            version: 3,
-            lines: [],
             powerline: {
-                enabled: false,
-                separators: ['\uE0B0'],
+                enabled: true,
+                separators: ['S'],
                 separatorInvertBackground: [false],
-                startCaps,
-                endCaps,
+                startCaps: ['<'],
+                endCaps: ['>'],
                 theme: undefined,
                 autoAlign: false,
                 continueThemeAcrossLines: false
             }
         }, 4) as Record<string, unknown>;
 
-        const pl = migrated.powerline as Record<string, unknown>;
+        const parsed = SettingsSchema.safeParse(migrated);
+        expect(parsed.success).toBe(true);
+        if (parsed.success) {
+            // Legacy fields flow through unchanged.
+            expect(parsed.data.powerline.separators).toEqual(['S']);
+            expect(parsed.data.powerline.startCaps).toEqual(['<']);
+            expect(parsed.data.powerline.endCaps).toEqual(['>']);
 
-        // Must be independent arrays, not same reference as old fields
-        expect(pl.groupStartCap).not.toBe(pl.startCaps);
-        expect(pl.lineStartCap).not.toBe(pl.startCaps);
-        expect(pl.groupStartCap).not.toBe(pl.lineStartCap);
-        expect(pl.groupEndCap).not.toBe(pl.endCaps);
-        expect(pl.lineEndCap).not.toBe(pl.endCaps);
-        expect(pl.groupEndCap).not.toBe(pl.lineEndCap);
+            // New fields default to the schema defaults, not to legacy values.
+            expect(parsed.data.powerline.widgetSeparator).toEqual(['\uE0B0']);
+            expect(parsed.data.powerline.groupStartCap).toEqual([]);
+            expect(parsed.data.powerline.groupEndCap).toEqual([]);
+            expect(parsed.data.powerline.lineStartCap).toEqual([]);
+            expect(parsed.data.powerline.lineEndCap).toEqual([]);
+            expect(parsed.data.powerline.groupGap).toBe('  ');
+        }
     });
 });
 
 // ---------------------------------------------------------------------------
-// Test 5: migration is idempotent on an already-v4 config
+// Idempotency for already-v4 configs: explicit user-set new vocab must not
+// be overwritten.
 // ---------------------------------------------------------------------------
 
 describe('powerline vocabulary: idempotency on v4 config', () => {
     it('does not re-run v3→v4 migration on a config that is already v4', () => {
-        // Build a v4 config that already has new vocab fields
         const v4Config = {
             version: 4,
             lines: [{ groups: [{ continuousColor: true, widgets: [{ id: 'w-1', type: 'model' }] }] }],
@@ -354,10 +323,8 @@ describe('powerline vocabulary: idempotency on v4 config', () => {
 
         const result = migrateConfig(v4Config, 4) as Record<string, unknown>;
 
-        // Version check: migration should not have run
         expect(result.version).toBe(4);
 
-        // New vocab fields must be untouched — migration didn't overwrite them
         const pl = result.powerline as Record<string, unknown>;
         expect(pl.widgetSeparator).toEqual(['CUSTOM']);
         expect(pl.groupStartCap).toEqual(['GSC']);

@@ -5,6 +5,19 @@ import type {
     WidgetEditorDisplay,
     WidgetItem
 } from '../types/Widget';
+import {
+    DEFAULT_CONTEXT_WINDOW_SIZE,
+    getContextConfig,
+    getModelContextIdentifier
+} from '../utils/model-context';
+
+function formatContextMarker(maxTokens: number): string {
+    if (maxTokens >= 1_000_000) {
+        const m = maxTokens / 1_000_000;
+        return `${Number.isInteger(m) ? m.toString() : m.toFixed(1)}M`;
+    }
+    return `${Math.round(maxTokens / 1_000)}K`;
+}
 
 export class ModelWidget implements StatefulWidget {
     getDefaultColor(): string { return 'cyan'; }
@@ -26,7 +39,17 @@ export class ModelWidget implements StatefulWidget {
             : (model?.display_name ?? model?.id);
 
         if (modelDisplayName) {
-            const shortName = modelDisplayName.replace(/\s*\(.*\)$/, '');
+            const baseName = modelDisplayName
+                .replace(/\s*\([^)]*\)\s*$/, '')
+                .replace(/\s*\[\s*\d+(?:[,_]\d+)*(?:\.\d+)?\s*[km]\s*\]\s*$/i, '')
+                .trim();
+
+            const identifier = getModelContextIdentifier(model);
+            const { maxTokens } = getContextConfig(identifier);
+            const shortName = maxTokens === DEFAULT_CONTEXT_WINDOW_SIZE
+                ? baseName
+                : `${baseName} (${formatContextMarker(maxTokens)})`;
+
             return item.rawValue ? shortName : `Model: ${shortName}`;
         }
         return null;

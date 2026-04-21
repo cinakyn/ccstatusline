@@ -8,7 +8,7 @@ interface ModelIdentifier {
     display_name?: string;
 }
 
-const DEFAULT_CONTEXT_WINDOW_SIZE = 200000;
+export const DEFAULT_CONTEXT_WINDOW_SIZE = 200000;
 const USABLE_CONTEXT_RATIO = 0.8;
 
 function toValidWindowSize(value: number | null | undefined): number | null {
